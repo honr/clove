@@ -13,7 +13,7 @@ gettimeofday_ts ()
 
 char *
 timespec_to_str (struct timespec ts)
-  { char * s = (char *) malloc (256);
+  { char * s = (char *) malloc (256); // TODO: fix hardcoded size
     sprintf (s, "%ld.%ld", ts.tv_sec, ts.tv_nsec);
     return s; }
 #endif // DEBUG
@@ -278,12 +278,12 @@ int unix_send_fds (int sock, struct remote_fds iofds)
 int unix_recv_fds(int sock, struct remote_fds* iofds_p)
   { // TODO: check buffer sizes (cmsg_buf_size, msg, iofds);
     struct iovec iov;
-    int cmsg_buf_size = 128; // CMSG_SPACE(sizeof(iofds))
+    int cmsg_buf_size = 128; // CMSG_SPACE(sizeof(iofds)) // TODO: fix hardcoded size
     char cmsg_buf[cmsg_buf_size];
 
-    char msg[128];
+    char msg[128]; // TODO: fix hardcoded size
     iov.iov_base = msg;
-    iov.iov_len  = 7;  // "message"
+    iov.iov_len  = 7;  // "message" // TODO: fix hardcoded size
 
     struct msghdr msgh =
       { .msg_name       = NULL,
@@ -319,7 +319,7 @@ int unix_recv_fds(int sock, struct remote_fds* iofds_p)
     return ret; }
 
 char* service_socket_path_dir ()
-  { char* path = malloc (256); // FIX HARDCODED
+  { char* path = malloc (256); // TODO: fix hardcoded size
     sprintf (path, "%s/var/run/clove", rtprefix ());
     return path; }
 
@@ -328,9 +328,9 @@ service_init (char* service_name)
   { struct service s;
     char* prefix = rtprefix ();
     s.name = service_name;
-    s.confpath = malloc (256); // FIX HARDCODED
-    s.binpath  = malloc (256); // FIX HARDCODED
-    s.sockpath = malloc (256); // FIX HARDCODED
+    s.confpath = malloc (256); // TODO: fix hardcoded size
+    s.binpath  = malloc (256); // TODO: fix hardcoded size
+    s.sockpath = malloc (256); // TODO: fix hardcoded size
 
     if (strcmp (s.name, "broker") == 0)
       { sprintf (s.confpath, "%s/etc/clove.conf", prefix);
@@ -383,9 +383,9 @@ service_call (struct service srv, char** default_envp)
     close (pipefd [1]);
     printf ("waiting for %s ...\n", srv.name);
     // TODO: have a time out
-    char* buf = malloc (128);
-    read (pipefd[0], buf, 127);
-    buf[127]=0;
+    char* buf = malloc (128); // TODO: fix hardcoded size
+    read (pipefd[0], buf, 127); // TODO: fix hardcoded size
+    buf[127]=0; // TODO: fix hardcoded size
     printf ("%s says: %s", srv.name, buf);
     close (pipefd[0]);
     return buf; }
@@ -413,7 +413,7 @@ struct serviceconf* parse_conf_file (char* filepath)
     
     char* whitespacechars = " \f\n\r\t\v";
     if ((file = fopen (filepath, "r")))
-      { while (fgets (line_storage, 8192, file))
+      { while (fgets (line_storage, 8192, file)) // TODO: fix hardcoded size
 	  { char* line = strndup (line_storage, strcspn (line_storage, "\n"));
 	    if (line[0] == '/')
 	      { line = line + 1; 	/* move beyond the '/' */
@@ -520,7 +520,7 @@ int makeancesdirs (char* path)
 	     q;
 	     q = strchr (p, '/'))
 	  { *q = 0;
-	    mkdir (path_dup, 01777);
+	    mkdir (path_dup, 01777); // TODO: fix hardcoded value
 	    // TOOD: make sure the mode 01777 is OK for all platforms.
 	    *q = '/';
 	    p = q + 1; }

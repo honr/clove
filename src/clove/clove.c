@@ -9,7 +9,6 @@
    
    TODO: daemon mode should actually fork and become daemon. use
    syslog for logs.
-
    */
 
 const char* clove_version = "0.0.1";
@@ -57,7 +56,7 @@ int main (int argc, char* argv[], char** envp)
       { mode = 'i'; 
 	opt_keep_processing = false; }
     else if ((argv[1][0] != '-') && (argv[1][0] != ':') && (argv[1][0] != '+'))
-      // jump right into client mode if no option is shipped
+      // jump right into client mode if no option is provided.
       { opt_keep_processing = false; }
 
     while (opt_keep_processing &&
@@ -84,9 +83,9 @@ int main (int argc, char* argv[], char** envp)
 		    *dp_fullpath_suf = '/';
 		    dp_fullpath_suf ++;
 		    *dp_fullpath_suf = '\0';
-		    // int readdir_r(DIR *restrict dirp, struct dirent *restrict entry, struct dirent **restrict result);
 		    struct dirent * dp = NULL;
-		    while ((dp = readdir (dirp)) != NULL)
+
+		    while ((dp = readdir (dirp)) != NULL) // isn't readdir_r better?
 		      { if (str_beginswith (dp->d_name, "clove-")) 
 			  { strcpy (dp_fullpath_suf, dp->d_name);
 			    printf ("removing %s\n", dp_fullpath);
@@ -130,10 +129,10 @@ int main (int argc, char* argv[], char** envp)
 	  { perror ("fopen #! file");
 	    fprintf (stderr, "supplied file: \"%s\"\n", argv[1]);
 	    exit (1); }
-	char *argbuf = malloc (4096);
+	char *argbuf = malloc (4096); // TODO: fix hardcoded size
 	char *argline;
-	fgets (argbuf, 4096, file_in); // discard the first line.
-	fgets (argbuf, 4096, file_in);
+	fgets (argbuf, 4096, file_in); // discard the first line. TODO: fix hardcoded size
+	fgets (argbuf, 4096, file_in); // TODO: fix hardcoded size
 
 	if ((argline = strstr (argbuf, "-*- |")))
 	  { argline += 5; } // skip over it
@@ -176,66 +175,21 @@ int main (int argc, char* argv[], char** envp)
 	
 	sigaction_inst (SIGHUP, sighup_handler);
 
-	// daemonize here
-	// 1) Daemonizing
+	// daemonize
 	{ int temp_i = fork();
 	  if (temp_i < 0) exit(1);   /* fork error */
 	  if (temp_i > 0) exit(0); } /* parent exits */
-	/* child (daemon) continues */
 	
-	// 2) Process Independency [setsid]
 	if (setsid () == -1)
 	  { perror ("setsid");
 	    exit (1); }
 	
-	// 3) Inherited Descriptors and Standart I/0 Descriptors
-	//    [gettablesize,fork,open,close,dup,stdio.h]
-	/* for (i=getdtablesize();i>=0;--i) close(i); /\* close all descriptors *\/ */
-	/* i=open("/dev/null",O_RDWR); /\* open stdin *\/ */
-	/* dup(i); /\* stdout *\/ */
-	/* dup(i); /\* stderr *\/ */
-
-	// 4) File Creation Mask [umask]
-	umask(027);
-	
-	// 5) Running Directory [chdir]
-	/* chdir("/servers/"); */
-
-	// 6) Mutual Exclusion and Running a Single Copy [open,lockf,getpid]
-
-	/* lfp=open("exampled.lock",O_RDWR|O_CREAT,0640); */
-	/* if (lfp<0) exit(1); /\* can not open *\/ */
-	/* if (lockf(lfp,F_TLOCK,0)<0) exit(0); /\* can not lock *\/ */
-	/* /\* only first instance continues *\/ */
-
-	/* sprintf(str,"%d\n",getpid()); */
-	/* write(lfp,str,strlen(str)); /\* record pid to lockfile *\/ */
-	
-	// 7) Catching Signals [signal,sys/signal.h]
-	/* signal(SIG_IGN,SIGCHLD); /\* child terminate signal *\/ */
-
-	/* void Signal_Handler(int sig) /\* signal handler function *\/ */
-	/* { */
-	/*   switch(sig){ */
-	/*     case SIGHUP: */
-	/*       /\* rehash the server *\/ */
-	/*       break;		 */
-	/*     case SIGTERM: */
-	/*       /\* finalize the server *\/ */
-	/*       exit(0) */
-	/* 	break;		 */
-	/*   }	 */
-	/* } */
-
-	/* signal(SIGHUP,Signal_Handler); /\* hangup signal *\/ */
-	/* signal(SIGTERM,Signal_Handler); /\* software termination signal from kill *\/ */
-	
-	// 8) Logging [syslogd,syslog.conf,openlog,syslog,closelog]
 	openlog ("Clove", LOG_PID, LOG_DAEMON);
-	char* current_hostname = malloc (4096);
-	gethostname (current_hostname, 4096);
+	char* current_hostname = malloc (4096); // TODO: fix hardcoded size
+	gethostname (current_hostname, 4096); // TODO: fix hardcoded size
 	syslog (LOG_INFO, "Connection from host %s", current_hostname);
 	syslog (LOG_ALERT, "Init complete.");
+	// TOOD: log the rest of stderr, too.
 	
 	int main_process_pid = getpid ();
 
@@ -252,14 +206,14 @@ int main (int argc, char* argv[], char** envp)
 		char buf[broker_message_length];
 		read (sock_a, buf, broker_message_length);
 		if (buf[0] == 0) // remote command
-		  { char* remote_command = strndup (buf + 1, 222);
+		  { char* remote_command = strndup (buf + 1, 222); // TODO: fix hardcoded size
 		    if (strcmp (remote_command, "quit") == 0)
 		      { kill (main_process_pid, SIGHUP); }
 		    else if (strcmp (remote_command, "stats") == 0)
 		      { printf ("I should show the number of current "
 				"subprocesses.\nNot implemented yet.\n"); }}
 		else // service
-		  { char* service_name = strndup (buf, 222);
+		  { char* service_name = strndup (buf, 222); // TODO: fix hardcoded size
 
 		    /*  TODO: see what happens to process group when the
 			parent exits.  At the beginning read about former
@@ -325,8 +279,8 @@ int main (int argc, char* argv[], char** envp)
 	  close (broker.sock); }
 
 	/* server unix path should be obtained now. */
-	strncpy (srv.sockpath, buf, 127);
-	srv.sockpath[127] = 0;
+	strncpy (srv.sockpath, buf, 127); // TODO: fix hardcoded size
+	srv.sockpath[127] = 0; // TODO: fix hardcoded size
 	srv.sock = sock_addr_connect (SOCK_STREAM, srv.sockpath);
 
 	struct remote_fds iofds =
@@ -360,8 +314,8 @@ int main (int argc, char* argv[], char** envp)
 	// printf ("buf_cur - buf %ld\n", buf_cur - buf);
 	write (srv.sock, buf, buf_cur - buf);
 
-	// TODO: communicate with the server in an out-of-band
-	// fashion. For instance, ask for completion.
+	// TODO: also, communicate with the server out-of-band, for
+	//       instance, ask for completion.
 
 	read (srv.sock, buf, broker_message_length); }
     else if (mode == 'i')

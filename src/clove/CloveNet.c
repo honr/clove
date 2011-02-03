@@ -151,12 +151,12 @@ int unix_send_fds (int sock, struct remote_fds iofds)
 int unix_recv_fds(int sock, struct remote_fds* iofds_p)
   { // TODO: check buffer sizes (cmsg_buf_size, msg, iofds);
     struct iovec iov;
-    int cmsg_buf_size = 128; // CMSG_SPACE(sizeof(iofds))
+    int cmsg_buf_size = 128; // CMSG_SPACE(sizeof(iofds)) // TODO: fix hardcoded size
     char cmsg_buf[cmsg_buf_size];
 
-    char msg[128];
+    char msg[128]; // TODO: fix hardcoded size
     iov.iov_base = msg;
-    iov.iov_len  = 7;  // "message"
+    iov.iov_len  = 7;  // "message" // TODO: fix hardcoded size
 
     struct msghdr msgh =
       { .msg_name       = NULL,
