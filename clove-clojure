@@ -1,0 +1,164 @@
+;; -*- Mode: Clojure -*-
+
+;; apparently BSD's execve and Linux's execve are different, and the
+;; body of this script is not being executed in BSD.
+
+(ns service.clojure
+  (:require [clojure.main])
+  (:import [clove CloveSecurityManager CloveExitException CloveNet]))
+
+(in-ns 'clojure.core)
+(def ^:dynamic *env* nil)
+(def ^:dynamic *cwd* nil)
+(def ^:dynamic *home* nil)
+(def ^:dynamic *username* nil)
+;; (intern 'clojure.core '*env* nil)
+;; (intern 'clojure.core '*cwd* nil)
+;; (intern 'clojure.core '*home* nil)
+;; (intern 'clojure.core '*username* nil)
+(in-ns 'user)
+(refer 'clojure.core)
+(in-ns 'service.clojure)
+
+;; (set! *warn-on-reflection* true)
+
+(def nom "clojure")
+(def sockpath
+     (str (System/getProperty "user.home")
+	  "/.local/var/run/clove/clove-" nom))
+
+(def sock (atom nil))
+
+(def old-security-manager (System/getSecurityManager))
+
+(defn init []
+  ;; let the broker know we are ready. broker uses this message to
+  ;; synchronize, so it is important.
+  (System/setSecurityManager
+   (CloveSecurityManager.
+    (System/getSecurityManager)))
+  (dosync (reset! sock (CloveNet/sock_addr_bind 1 (.getBytes sockpath) 1)))
+  (println "Ready."))
+
+(defn terminate [n]
+  (System/setSecurityManager
+   old-security-manager)
+
+  (.println *err* (str nom ": closing."))
+  (CloveNet/close @sock)
+  (.delete (java.io.File. sockpath))
+  (System/exit n))
+
+(def message-length 8192)
+
+;; TODO: See if there are any conceivable security implications for
+;;       the following hack:
+(def FileDescriptor-fd-field
+     (.getDeclaredField java.io.FileDescriptor "fd"))
+(.setAccessible FileDescriptor-fd-field true)
+
+;; (printlnfd (str (.fd (java.io.FileDescriptor.))))
+
+(defn fd-get-num [#^java.io.FileDescriptor fd]
+  (.getInt FileDescriptor-fd-field fd))
+
+(defn obtain-remote-fds [sock]
+  (if-let [remote-fds-ba (CloveNet/unix_recv_fds sock)]
+    (let [[fd-in fd-out fd-err] (seq remote-fds-ba)]
+     {:in  fd-in
+      :out fd-out
+      :err fd-err})))
+
+(defn read-ab-string-vector [#^java.nio.ByteBuffer bb]
+  ;; TODO: watch out for unicode!
+    (let [bb-dup (.duplicate bb)]
+     (loop [v []]
+       (if (not (.hasRemaining bb))
+	 v
+	 (do
+	   (while (not (= (.get bb) 0)))
+	   (let [len (- (.position bb) (.position bb-dup) 1)]
+	     (if (zero? len)
+	       v
+	       (recur (conj v (let [ba (make-array Byte/TYPE len)]
+				(.get bb-dup ba 0 len)
+				(.get bb-dup)
+				(String. #^bytes ba)))))))))))
+
+(defn obtain-remote-context [sock]
+  (if-let [data (CloveNet/read sock message-length)]
+    (let [data (java.nio.ByteBuffer/wrap data)]
+      [(read-ab-string-vector data)
+       (into {} (map (fn [#^String s]
+		       (vec (take 2 (conj (vec (.split s "=" 2)) nil))))
+		     (read-ab-string-vector data)))])))
+
+(def running (atom true))
+
+;; TODO: terminate thread when certain errors occur.
+(defn process-thread [sock]
+  (try
+    (let [fds (obtain-remote-fds sock)
+	  [args env] (obtain-remote-context sock)]
+
+      (if (= (first args) "-q")
+	(terminate 0)
+	(do
+	  (.println *err* (apply format "[%d %d %d] open"
+				 (map fd-get-num (vals fds))))
+	  
+	  (binding [clojure.core/*env* env
+		    clojure.core/*cwd* (get env "PWD")
+		    clojure.core/*home* (get env "HOME")
+		    clojure.core/*username* (get env "USER")
+		    *out* (java.io.OutputStreamWriter.
+			   (java.io.FileOutputStream. (fds :out)))
+		    *err* (java.io.PrintWriter.
+			   (java.io.FileOutputStream. (fds :err))
+			   true)	; auto flush
+		    *in* (clojure.lang.LineNumberingPushbackReader.
+			  (java.io.InputStreamReader.
+			   (java.io.FileInputStream. (fds :in))))]
+	    (try (apply clojure.main/main args)
+		 ;; (catch java.io.IOException e nil)
+		 (catch CloveExitException e nil)
+		 (catch clojure.lang.Compiler$CompilerException e
+		   (.printStackTrace e *err*))
+		 (catch Exception e
+		   (.printStackTrace e *err*))))
+
+	  (.println *err* (apply format "[%d %d %d] close"
+				 (map fd-get-num (vals fds))))))
+
+      ;; BUG: Somehow, when used in a pipe the termination of the pipe is
+      ;; not communicated back to the client.
+
+      ;; Closing FDs apparently interferes with java's garbage
+      ;; collector. If the next lines are left uncommented, if you
+      ;; (issue (System/gc) on the second time you open a connection)
+      ;; it the live FDs will get garbage collected. There should be a
+      ;; way to mark new FDs as open.
+      
+      ;; (libc/fsync (:num (fds :out)))
+      ;; (libc/close (:num (fds :out)))
+      ;; (libc/fsync (:num (fds :err)))
+      ;; (libc/close (:num (fds :err)))
+      ;; ;; TODO: what to do with this:
+      ;; (libc/close (:num (fds :in)))
+      ;; (libc/shutdown sock)
+      ;; (CloveNet/close (fd-get-num (:out fds)))
+      (CloveNet/close sock)
+      (System/gc) ; darn! We should never need to call System/gc.
+		  ; Instead, we should find a way to politely ask java to
+		  ; garbage collect the file descriptors.
+      )
+    (catch Exception e nil
+	   (.printStackTrace e *err*)
+	   )))
+
+(init)
+(while @running
+  ;; (.println *err* (str "ready to accept on socket " @sock))
+  (let [sock-a (CloveNet/accept @sock)]
+    (.start (Thread. (fn [] (process-thread sock-a))))))
+(terminate 0)

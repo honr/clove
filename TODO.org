@@ -1,0 +1,17 @@
+#+TODO: TODO | INPROGRESS | DONE
+
+Remaining Tasks for Clove
+
+See also https://github.com/honr/clove/issues
+
+* fix:
+** take out hard coded numbers
+   Use PATH_MAX, ARG_MAX, etc.
+** define specs for a clove service
+** take care of deleting socket paths
+** fix the fd close, garbage collection
+** modularize clove-utils.c into several pieces.
+* broker should also have process babysitting utilities
+  1. start process (automatic?)
+  2. stop, restart, status
+  3. know about sub-processes (cgroup?)
