@@ -23,7 +23,7 @@ int usage (int n)
 	    " clove --list # list the clove socket paths\n"
 	    " clove --daemon # start a clove daemon\n"
 	    " clove --client <clove service> [<client commands>]\n"
-	    "       # issue commands to the given service, possibly starting it.");
+	    "       # issue commands to the given service, possibly starting it.\n");
     exit (n); }
 
 int running = true;

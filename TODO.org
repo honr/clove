@@ -3,15 +3,27 @@
 Remaining Tasks for Clove
 
 See also https://github.com/honr/clove/issues
-
-* fix:
-** take out hard coded numbers
-   Use PATH_MAX, ARG_MAX, etc.
-** define specs for a clove service
-** take care of deleting socket paths
-** fix the fd close, garbage collection
-** modularize clove-utils.c into several pieces.
-* broker should also have process babysitting utilities
-  1. start process (automatic?)
-  2. stop, restart, status
-  3. know about sub-processes (cgroup?)
+* Bugs/Fixes
+** fix:
+*** take out hard coded numbers
+    Use PATH_MAX, ARG_MAX, etc.
+*** define specs for a clove service
+*** take care of deleting socket paths
+*** fix the fd close, garbage collection
+*** modularize clove-utils.c into several pieces.
+** broker should also have process babysitting utilities
+   1. start process (automatic?)
+   2. stop, restart, status
+   3. know about sub-processes (cgroup?)
+* Features/Wishlist:
+** Grammar
+   1. Find grammar parsers, parser generators (equiv of flex/bison? PEG?)
+      1. simplify/lispify grammars
+      2. define a few example command line option parsers
+      3. additionally define a splitter for clove server args (# | service)
+   2. Find option (getopt) parsers
+   3. Find bash (and optionally zsh) completion APIs
+   4. Build a grammar definition and language and parser for command line
+   5. Additionally, develop a set of shell tools using Java
+      1. define: file/path, file/fpath, file/grep, find, tail, etc.
+   6. Develop a shell tool wrapper: (defcli path grammar)

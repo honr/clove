@@ -77,11 +77,10 @@ install: all
 	install build/lib/libCloveNet.$(LIBEXT) $(INSTALLDIR)/lib/$(ARCHI)
 	install build/clove.jar $(INSTALLDIR)/share/java
 
-	install -d $(INSTALLDIR)/etc
-	install -d $(INSTALLDIR)/bin
-	install clove.conf $(INSTALLDIR)/etc
-	install clove-clojure.conf $(INSTALLDIR)/etc
-	install clove-clojure $(INSTALLDIR)/bin
+	install -d $(INSTALLDIR)/share/clove
+	install clove.conf $(INSTALLDIR)/share/clove
+	install clove-clojure $(INSTALLDIR)/share/clove
+	install clove-clojure.conf $(INSTALLDIR)/share/clove
 
 clean:
 	-rm -Rf build

@@ -319,8 +319,11 @@ int unix_recv_fds(int sock, struct remote_fds* iofds_p)
     return ret; }
 
 char* service_socket_path_dir ()
-  { char* path = malloc (256); // TODO: fix hardcoded size
-    sprintf (path, "%s/var/run/clove", rtprefix ());
+  { char* path = malloc (PATH_MAX);
+    // TODO: use a path under /tmp to avoid going through nfs if home is remote.
+    if (snprintf (path, PATH_MAX, "%s/var/run/clove", rtprefix ()) >= PATH_MAX)
+      { perror ("snprintf rtprefix too large; service_socket_path_dir would become too large");
+	exit (2); };
     return path; }
 
 struct service
@@ -328,17 +331,17 @@ service_init (char* service_name)
   { struct service s;
     char* prefix = rtprefix ();
     s.name = service_name;
-    s.confpath = malloc (256); // TODO: fix hardcoded size
-    s.binpath  = malloc (256); // TODO: fix hardcoded size
-    s.sockpath = malloc (256); // TODO: fix hardcoded size
+    s.confpath = malloc (PATH_MAX);
+    s.binpath  = malloc (PATH_MAX);
+    s.sockpath = malloc (PATH_MAX);
 
     if (strcmp (s.name, "broker") == 0)
-      { sprintf (s.confpath, "%s/etc/clove.conf", prefix);
+      { sprintf (s.confpath, "%s/share/clove/clove.conf", prefix);
 	s.binpath = NULL;
 	sprintf (s.sockpath, "%s/broker", service_socket_path_dir ()); }
     else
-      { sprintf (s.confpath, "%s/etc/clove-%s.conf", prefix, s.name);
-	sprintf (s.binpath,  "%s/bin/clove-%s", prefix, s.name);
+      { sprintf (s.confpath, "%s/share/clove/clove-%s.conf", prefix, s.name);
+	sprintf (s.binpath,  "%s/share/clove/clove-%s", prefix, s.name);
 	sprintf (s.sockpath, "%s/clove-%s", service_socket_path_dir (), s.name); }
 
     s.confpath_last_mtime = 0;
@@ -401,7 +404,7 @@ struct serviceconf* parse_conf_file (char* filepath)
    TODO: split key and value, and perform ~~ (or $THIS) replacement.
  */
   { FILE* file;
-    char line_storage[8192]; // TODO: fix hardcoded
+    char line_storage[CONFLINE_MAX];
 
     struct serviceconf* sc = (struct serviceconf*) malloc 
       (sizeof (struct serviceconf));
@@ -413,7 +416,7 @@ struct serviceconf* parse_conf_file (char* filepath)
     
     char* whitespacechars = " \f\n\r\t\v";
     if ((file = fopen (filepath, "r")))
-      { while (fgets (line_storage, 8192, file)) // TODO: fix hardcoded size
+      { while (fgets (line_storage, CONFLINE_MAX, file))
 	  { char* line = strndup (line_storage, strcspn (line_storage, "\n"));
 	    if (line[0] == '/')
 	      { line = line + 1; 	/* move beyond the '/' */

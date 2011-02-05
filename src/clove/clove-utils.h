@@ -41,6 +41,9 @@
 #define YELLOW(x) "\033[33m" x "\033[00m"
 #define BLUE(x)   "\033[34m" x "\033[00m"
 
+#define CONFLINE_MAX 8192
+// maximum size of each line in the config file.
+
 #define DEBUG
 
 #ifdef DEBUG
