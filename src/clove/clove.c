@@ -103,12 +103,8 @@ int main (int argc, char* argv[], char** envp)
 	      mode = c;
 	      // info = optarg;
 	      break;
-	    case 'r': // send a message to the remote service, and exit.
-	      mode = c;
-	      remote_args = str_list_from_vec (argv, optind - 1, argc - 1);
-	      opt_keep_processing = false;
-	      break;
 	    case 'c': // send a message to the remote service, and exit.
+	    case 'r': // send a message to the broker, and exit.
 	      mode = c;
 	      remote_args = str_list_from_vec (argv, optind - 1, argc - 1);
 	      opt_keep_processing = false;
@@ -154,8 +150,23 @@ int main (int argc, char* argv[], char** envp)
 	fclose (file_in); }
 
     if (mode == 'd')
-      { // int sock_type = SOCK_STREAM | SOCK_CLOEXEC;
-
+      { // try to communicate with the existing broker if
+	// broker.sockpath exists.  If the broker responds, simply
+	// print out its pid and quit.
+	if ((broker.sock = sock_addr_connect (SOCK_STREAM, broker.sockpath))
+	    != -1)
+	  { char buf[broker_message_length];
+	    buf[0] = 0; // means remote command, not a service.
+	    strcpy (buf + 1, "ping");
+	    write (broker.sock, buf, strlen (buf + 1) + 2);
+	    if (read (broker.sock, buf, broker_message_length - 1) > 0)
+	      { buf[broker_message_length - 1] = 0;
+		printf ("a broker exists with pid: %s\n", buf);
+		close (broker.sock);
+		exit (0); }
+	    else { close (broker.sock); }}
+	unlink (broker.sockpath); // maybe wipe dead socket path
+	
 	// read default service config
 	char** default_envp = envp;
 	default_envp = envp_dup_update_or_add
@@ -168,8 +179,8 @@ int main (int argc, char* argv[], char** envp)
 	// create sockpath parent directory:
 	makeancesdirs (broker.sockpath);
 	
-	int sock_type = SOCK_STREAM;
-	broker.sock = sock_addr_bind (sock_type, broker.sockpath, true);
+	broker.sock = sock_addr_bind (SOCK_STREAM, broker.sockpath, true);
+	// or: SOCK_STREAM | SOCK_CLOEXEC;
 
 	// int main_process_pgid = getpgid (0);
 	
@@ -207,11 +218,15 @@ int main (int argc, char* argv[], char** envp)
 		read (sock_a, buf, broker_message_length);
 		if (buf[0] == 0) // remote command
 		  { char* remote_command = strndup (buf + 1, 222); // TODO: fix hardcoded size
-		    if (strcmp (remote_command, "quit") == 0)
+		    if      (strcmp (remote_command, "quit") == 0)
 		      { kill (main_process_pid, SIGHUP); }
 		    else if (strcmp (remote_command, "stats") == 0)
 		      { printf ("I should show the number of current "
-				"subprocesses.\nNot implemented yet.\n"); }}
+				"subprocesses.\nNot implemented yet.\n"); }
+		    else if (strcmp (remote_command, "ping") == 0)
+		      { char* reply = malloc (128); // TODO: fix hardcoded size
+			sprintf (reply, "%d", main_process_pid);
+			write (sock_a, reply, strlen (reply)); }}
 		else // service
 		  { char* service_name = strndup (buf, 222); // TODO: fix hardcoded size
 
@@ -241,19 +256,19 @@ int main (int argc, char* argv[], char** envp)
       { char* rgv[] = { "ls", "-lA", service_socket_path_dir (), NULL };
 	execve ("/bin/ls", rgv, NULL); }
     else if (mode == 'r')
-      { broker.sock = sock_addr_connect (SOCK_STREAM, broker.sockpath);
-	char buf[broker_message_length];
+      { char buf[broker_message_length];
 	struct str_list* cur;
 	for (cur = remote_args;
 	     cur;
 	     cur = cur->next)
 	  { strncpy (buf + 1, cur->str, broker_message_length - 2);
 	    buf[0] = 0; // means remote command, not a service.
+	    broker.sock = sock_addr_connect (SOCK_STREAM, broker.sockpath);
 	    write (broker.sock, buf, strlen (cur->str) + 2);
 	    if (read (broker.sock, buf, broker_message_length - 1) > 0)
 	      { buf[broker_message_length - 1] = 0;
-		printf ("%s\n", buf); }}
-	close (broker.sock); }
+		printf ("%s\n", buf); }
+	    close (broker.sock); }}
     else if (mode == 'c')
       { broker.sock = sock_addr_connect (SOCK_STREAM, broker.sockpath);
 
