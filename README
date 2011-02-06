@@ -32,7 +32,7 @@ Note: currently there are some hardcoded assumptions about where we
       ~/.local/, and use ~/.local/var/run/clove/ for AF_UNIX socket
       paths.
 
-Using Clove:
+* Using Clove:
 We assume that you have something like the following in your
 ~/.bashrc, effectively adding two directories to your PATH:
 
@@ -59,12 +59,9 @@ export PATH="${HOME}/.local/bin/${SYSARCH}:${HOME}/.local/bin:${PATH}"
 ------------------------------ END SNIPPET ------------------------------
 
 Now you can run the clove daemon:
-$ clove -Wwd
-or, in the future when we automatically take care of wiping dead
-socket paths:
 $ clove -d
 
-Currently, you might want to run the clove daemon in a screen session,
+Currently, you might want to run the clove daemon in a screen session
 to be able to see some debugging output.  In the future you are going
 to have a choice for sending the output to the syslog facility.
 
@@ -74,9 +71,9 @@ $ clove -c clojure -e "(+ 1 2 4 8)"
 * Clove Services and their Configuration Files
 
 Each clove service is an executable file in your path, for instance
-`~/.local/bin/clove-clojure'. Each service can (and should) have a
-configuration file outlining how to run it (shebang), and what
-environment variables to set.  Parsing is very rudimentary: 
+`~/.local/share/clove/clove-clojure'. Each service can (and should)
+have a configuration file outlining how to run it (shebang), and what
+environment variables to set.  Parsing is very rudimentary:
 
 1. The shebang line is used to exec the rest of the file (more than two
    args are also accepted).
