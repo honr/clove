@@ -103,7 +103,7 @@
 
 	(cond (= (first args) "-q") (terminate 0)
 	      (= (first args) "--ping") (println "Yes darling. What is it?")
-	      true
+	      :default
 	      (do
 		(.println *err* (apply format "[%d %d %d] open"
 				       (map fd-get-num (vals fds))))
@@ -120,7 +120,12 @@
 			  *in* (clojure.lang.LineNumberingPushbackReader.
 				(java.io.InputStreamReader.
 				 (java.io.FileInputStream. (fds :in))))]
-		  (try (apply clojure.main/main args)
+		  (try
+		    (let [fa (first args)]
+		      (if (and fa (not (.startsWith fa "-")) (not (.startsWith fa "/")))
+			;; if the first arg is a path, get the absolute path with regards to cwd.
+			(apply clojure.main/main (.getCanonicalPath (java.io.File. clojure.core/*cwd* fa)) (rest args))
+			(apply clojure.main/main args)))
 		       ;; (catch java.io.IOException e nil)
 		       (catch CloveExitException e nil)
 		       (catch clojure.lang.Compiler$CompilerException e
