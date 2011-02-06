@@ -185,9 +185,9 @@ int unix_recv_fds(int sock, struct remote_fds* iofds_p)
 
         if (cmsg == NULL)
           { fprintf (stderr, "control header is NULL\n"); }}
-    else
-      { fprintf (stderr, "errno: %d\n", errno);
-        perror ("recvmsg"); }
+    /* else
+       { fprintf (stderr, "errno: %d\n", errno);
+         perror ("recvmsg"); } */
 
     return ret; }
 
@@ -252,8 +252,8 @@ JNIEXPORT jobjectArray JNICALL Java_clove_CloveNet_unix_1recv_1fds
   { struct remote_fds fds;
     int len;
     if ((len = unix_recv_fds (sock, &fds)) <= 0)
-      { perror ("unix_recv_fds");
-	// what to do here?
+      { // perror ("unix_recv_fds");
+	// what to do here? returning NULL is probably enough.
 	return NULL; }
     else
       { jfieldID field_fd;
@@ -261,13 +261,11 @@ JNIEXPORT jobjectArray JNICALL Java_clove_CloveNet_unix_1recv_1fds
 	jclass class_fdesc;
 
 	if ((class_fdesc = (*env)->FindClass 
-	     (env, "java/io/FileDescriptor"))
-	    == NULL)
+	     (env, "java/io/FileDescriptor")) == NULL)
 	  { return NULL; }
 
 	if ((field_fd = (*env)->GetFieldID 
-	     (env, class_fdesc, "fd", "I"))
-	    == NULL) 
+	     (env, class_fdesc, "fd", "I")) == NULL) 
 	  { return NULL; }
 
 	if ((const_fdesc = (*env)->GetMethodID 

@@ -32,12 +32,12 @@
 (def old-security-manager (System/getSecurityManager))
 
 (defn init []
-  ;; let the broker know we are ready. broker uses this message to
-  ;; synchronize, so it is important.
   (System/setSecurityManager
    (CloveSecurityManager.
     (System/getSecurityManager)))
   (dosync (reset! sock (CloveNet/sock_addr_bind 1 (.getBytes sockpath) 1)))
+  ;; let the broker know we are ready. broker uses this message to
+  ;; synchronize, so it is important.
   (println "Ready."))
 
 (defn terminate [n]
@@ -63,7 +63,7 @@
   (.getInt FileDescriptor-fd-field fd))
 
 (defn obtain-remote-fds [sock]
-  (if-let [remote-fds-ba (CloveNet/unix_recv_fds sock)]
+  (when-let [remote-fds-ba (CloveNet/unix_recv_fds sock)]
     (let [[fd-in fd-out fd-err] (seq remote-fds-ba)]
      {:in  fd-in
       :out fd-out
@@ -98,60 +98,62 @@
 ;; TODO: terminate thread when certain errors occur.
 (defn process-thread [sock]
   (try
-    (let [fds (obtain-remote-fds sock)
-	  [args env] (obtain-remote-context sock)]
+    (if-let [fds (obtain-remote-fds sock)]
+      (let [[args env] (obtain-remote-context sock)]
 
-      (if (= (first args) "-q")
-	(terminate 0)
-	(do
-	  (.println *err* (apply format "[%d %d %d] open"
-				 (map fd-get-num (vals fds))))
-	  
-	  (binding [clojure.core/*env* env
-		    clojure.core/*cwd* (get env "PWD")
-		    clojure.core/*home* (get env "HOME")
-		    clojure.core/*username* (get env "USER")
-		    *out* (java.io.OutputStreamWriter.
-			   (java.io.FileOutputStream. (fds :out)))
-		    *err* (java.io.PrintWriter.
-			   (java.io.FileOutputStream. (fds :err))
-			   true)	; auto flush
-		    *in* (clojure.lang.LineNumberingPushbackReader.
-			  (java.io.InputStreamReader.
-			   (java.io.FileInputStream. (fds :in))))]
-	    (try (apply clojure.main/main args)
-		 ;; (catch java.io.IOException e nil)
-		 (catch CloveExitException e nil)
-		 (catch clojure.lang.Compiler$CompilerException e
-		   (.printStackTrace e *err*))
-		 (catch Exception e
-		   (.printStackTrace e *err*))))
+	(cond (= (first args) "-q") (terminate 0)
+	      (= (first args) "--ping") (println "Yes darling. What is it?")
+	      true
+	      (do
+		(.println *err* (apply format "[%d %d %d] open"
+				       (map fd-get-num (vals fds))))
+	      
+		(binding [clojure.core/*env* env
+			  clojure.core/*cwd* (get env "PWD")
+			  clojure.core/*home* (get env "HOME")
+			  clojure.core/*username* (get env "USER")
+			  *out* (java.io.OutputStreamWriter.
+				 (java.io.FileOutputStream. (fds :out)))
+			  *err* (java.io.PrintWriter.
+				 (java.io.FileOutputStream. (fds :err))
+				 true)	; auto flush
+			  *in* (clojure.lang.LineNumberingPushbackReader.
+				(java.io.InputStreamReader.
+				 (java.io.FileInputStream. (fds :in))))]
+		  (try (apply clojure.main/main args)
+		       ;; (catch java.io.IOException e nil)
+		       (catch CloveExitException e nil)
+		       (catch clojure.lang.Compiler$CompilerException e
+			 (.printStackTrace e *err*))
+		       (catch Exception e
+			 (.printStackTrace e *err*))))
 
-	  (.println *err* (apply format "[%d %d %d] close"
-				 (map fd-get-num (vals fds))))))
+		(.println *err* (apply format "[%d %d %d] close"
+				       (map fd-get-num (vals fds))))))
 
-      ;; BUG: Somehow, when used in a pipe the termination of the pipe is
-      ;; not communicated back to the client.
+	;; BUG: Somehow, when used in a pipe the termination of the pipe is
+	;; not communicated back to the client.
 
-      ;; Closing FDs apparently interferes with java's garbage
-      ;; collector. If the next lines are left uncommented, if you
-      ;; (issue (System/gc) on the second time you open a connection)
-      ;; it the live FDs will get garbage collected. There should be a
-      ;; way to mark new FDs as open.
+	;; Closing FDs apparently interferes with java's garbage
+	;; collector. If the next lines are left uncommented, if you
+	;; (issue (System/gc) on the second time you open a connection)
+	;; it the live FDs will get garbage collected. There should be a
+	;; way to mark new FDs as open.
       
-      ;; (libc/fsync (:num (fds :out)))
-      ;; (libc/close (:num (fds :out)))
-      ;; (libc/fsync (:num (fds :err)))
-      ;; (libc/close (:num (fds :err)))
-      ;; ;; TODO: what to do with this:
-      ;; (libc/close (:num (fds :in)))
-      ;; (libc/shutdown sock)
-      ;; (CloveNet/close (fd-get-num (:out fds)))
-      (CloveNet/close sock)
-      (System/gc) ; darn! We should never need to call System/gc.
-		  ; Instead, we should find a way to politely ask java to
-		  ; garbage collect the file descriptors.
-      )
+	;; (libc/fsync (:num (fds :out)))
+	;; (libc/close (:num (fds :out)))
+	;; (libc/fsync (:num (fds :err)))
+	;; (libc/close (:num (fds :err)))
+	;; ;; TODO: what to do with this:
+	;; (libc/close (:num (fds :in)))
+	;; (libc/shutdown sock)
+	;; (CloveNet/close (fd-get-num (:out fds)))
+	(CloveNet/close sock)
+	(System/gc)    ; darn! We should never need to call System/gc.
+					; Instead, we should find a way to politely ask java to
+					; garbage collect the file descriptors.
+	)
+      (.println *err* "Unable to obtain remote fds."))
     (catch Exception e nil
 	   (.printStackTrace e *err*)
 	   )))

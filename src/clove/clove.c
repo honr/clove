@@ -30,14 +30,13 @@ int running = true;
 
 void sighup_handler (int signum)
   { running = 0; }
-
+  
 int main (int argc, char* argv[], char** envp)
   { static struct option long_options[] =
       {{"daemon",  0, 0, 'd'},
        {"list",  0, 0, 'l'},
        {"extraenv",  1, 0, 'x'},
-       {"wipe-broker", 0, 0, 'W'},
-       {"wipe-services", 0, 0, 'w'},
+       {"force-wipe", 0, 0, 'w'},
        {"remote", 1, 0, 'r'},
        {"client", 1, 0, 'c'},
        {"version", 0, 0, 'v'},
@@ -50,6 +49,7 @@ int main (int argc, char* argv[], char** envp)
     struct service broker = service_init ("broker");
     struct str_list* remote_args = NULL;
 
+    int force_wipe_sockpaths = false;
     int mode = 0;
     int opt_keep_processing = true;
     if (argc <= 1)
@@ -60,41 +60,14 @@ int main (int argc, char* argv[], char** envp)
       { opt_keep_processing = false; }
 
     while (opt_keep_processing &&
-	   ((c = getopt_long (argc, argv, "x:Wwdlr:c:hv",
+	   ((c = getopt_long (argc, argv, "x:wdlr:c:hv",
 			      long_options, &option_index)) != -1))
       { switch (c)
 	  { case 'x':
 	      extraenvs = str_list_cons (optarg, extraenvs);
 	      break;
-	    case 'W':
-	      unlink (broker.sockpath);
-	      break;
 	    case 'w':
-	      // TODO: have an aggressive and a smooth start mode,
-	      //       where the aggressive start mode just wipes all
-	      //       current services, while the smooth start mode
-	      //       checks every potentially running service to see
-	      //       if they are alive.
-	      { char* dp_fullpath = (char*) malloc (PATH_MAX);
-		strcpy (dp_fullpath, service_socket_path_dir ());
-		DIR* dirp;
-		if ((dirp = opendir (dp_fullpath)) != NULL)
-		  { char* dp_fullpath_suf = dp_fullpath + strlen (dp_fullpath);
-		    *dp_fullpath_suf = '/';
-		    dp_fullpath_suf ++;
-		    *dp_fullpath_suf = '\0';
-		    struct dirent * dp = NULL;
-
-		    while ((dp = readdir (dirp)) != NULL) // isn't readdir_r better?
-		      { if (str_beginswith (dp->d_name, "clove-")) 
-			  { strcpy (dp_fullpath_suf, dp->d_name);
-			    printf ("removing %s\n", dp_fullpath);
-			    unlink (dp_fullpath);
-			    // now unlink dp.
-			  }}
-		    free (dp_fullpath);
-		    (void) closedir (dirp); }}
-	      // unlink (service_init (optarg).sockpath);
+	      force_wipe_sockpaths = true;
 	      break;
 	    case 'd':
 	      mode = c;
@@ -123,7 +96,7 @@ int main (int argc, char* argv[], char** envp)
 	FILE *file_in;
 	if ((file_in = fopen (argv[1], "r")) == NULL)
 	  { perror ("fopen #! file");
-	    fprintf (stderr, "supplied file: \"%s\"\n", argv[1]);
+	    fprintf (stderr, "supplied file: `%s'\n", argv[1]);
 	    exit (1); }
 	char *argbuf = malloc (4096); // TODO: fix hardcoded size
 	char *argline;
@@ -136,7 +109,7 @@ int main (int argc, char* argv[], char** envp)
 	  { argline += 1; } // skip over it
 	else
 	  { fprintf (stderr, 
-		     "The second line in file:\n   %s\n"
+		     "The second line in file:\n   `%s'\n"
 		     "should indicate the service using `|'.\nFor exmaple:\n"
 		     "#!/usr/bin/env clove\n;; | clojure\n\n", argv[1]);
 	    exit (1); }
@@ -153,7 +126,8 @@ int main (int argc, char* argv[], char** envp)
       { // try to communicate with the existing broker if
 	// broker.sockpath exists.  If the broker responds, simply
 	// print out its pid and quit.
-	if ((broker.sock = sock_addr_connect (SOCK_STREAM, broker.sockpath))
+	if ((!force_wipe_sockpaths) &&
+	    (broker.sock = sock_addr_connect (SOCK_STREAM, broker.sockpath))
 	    != -1)
 	  { char buf[broker_message_length];
 	    buf[0] = 0; // means remote command, not a service.
@@ -166,6 +140,35 @@ int main (int argc, char* argv[], char** envp)
 		exit (0); }
 	    else { close (broker.sock); }}
 	unlink (broker.sockpath); // maybe wipe dead socket path
+	
+	// wipe service socket paths.
+	{ char* dp_fullpath = (char*) malloc (PATH_MAX);
+	  strcpy (dp_fullpath, service_socket_path_dir ());
+	  DIR* dirp;
+	  if ((dirp = opendir (dp_fullpath)) != NULL)
+	    { char* dp_fullpath_suf = dp_fullpath + strlen (dp_fullpath);
+	      *dp_fullpath_suf = '/';
+	      dp_fullpath_suf ++;
+	      *dp_fullpath_suf = '\0';
+	      struct dirent * dp = NULL;
+
+	      while ((dp = readdir (dirp)) != NULL) // isn't readdir_r better?
+		{ if (str_beginswith (dp->d_name, "clove-")) 
+		    { strcpy (dp_fullpath_suf, dp->d_name);
+		      if (! force_wipe_sockpaths) 
+			{ int service_sock;
+			  if ((service_sock = sock_addr_connect (SOCK_STREAM, dp_fullpath))
+			      != -1) // a single connect and then close is used for probing.
+			    { printf ("seems to be alive `%s'\n", dp_fullpath);
+			      close (service_sock); }
+			  else 
+			    { printf ("does not response. removing `%s'\n", dp_fullpath);
+			      unlink (dp_fullpath); }}
+		      else
+			{ printf ("removing `%s'\n", dp_fullpath);
+			  unlink (dp_fullpath); }}}
+	      free (dp_fullpath);
+	      closedir (dirp); }}
 	
 	// read default service config
 	char** default_envp = envp;
