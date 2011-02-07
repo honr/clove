@@ -95,14 +95,41 @@ str_list_free (struct str_list* lst);
 
 struct str_list*
 str_split (char* str, char* delims);
-/* destructively split string into a string list.  
+/* destructively split string into a str_list.
    str cannot be const (or non-writable).  empty tokens are
    suppressed. */
 
 struct str_list*
 str_split_n (char* str, int limit, char* delims);
-/* same as str_split_n, except there is a limit to number of
+/* same as str_split, except there is a limit to number of
    delimitions. */
+
+struct str_list*
+str_split_qe (char* buf, size_t buf_size);
+/* split buf of maximum size buf_size into a str_list.
+   empty terms are not allowed (terminates the str_list at that
+   point).  quotations (single and double quote characters) and also
+   escaping (using backslash) are respected. */
+
+void*
+str_list_to_pack (char** buf_cur, const char* buf_lim, struct str_list* lst);
+/* place the str_list lst in the buffer. places a NULL character after
+   each string. two consecutive NULLs show the end of pack. buf_lim
+   points to right after the end of buffer, beyond which we never
+   write. buf_cur will be modified to point to right after the pack in
+   the buffer.
+   You can use the idiom: buf_cur = buf; buf_lim = buf +
+   buffer_size;
+
+   None of the strings should be empty.
+   TODO: relax this restriction. use the format ~aaa0~bbb0~ccc00. */
+
+struct str_list*
+str_list_from_pack (char** buf_cur, const char* buf_lim);
+/* create a str_list from a pack in the input buffer.
+   buf_cur will be updated to point to right after the pack in the
+   buffer.  buf_lim shows the extent right before which we read the
+   input buffer. */
 
 char*
 str_replace (char* s, char* from, char* to);

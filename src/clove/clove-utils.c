@@ -147,6 +147,78 @@ struct str_list* str_split_n (char* str, int limit, char* delims)
       { head = str_list_cons (running, head); }
     return head; }
 
+struct str_list* str_split_qe (char* buf, size_t buf_size)
+  { char *buf_cur, *buf_new_cur, c, state, action, quote;
+    char STATE_ESCAPE = 128;
+    char* buf_new = malloc (buf_size);
+    for (buf_cur = buf, buf_new_cur = buf_new, state = 's';
+	 *buf_cur;
+	 buf_cur++)
+      { c = *buf_cur;
+	action = 0;
+
+	if (state & STATE_ESCAPE)
+	  { state ^= STATE_ESCAPE; }
+	else if (state == 's')
+	  { if ((c == ' ') || (c == '\t') || (c == '\n') || (c == '\r'))
+	      { action = 'p'; } // pass
+	    else if ((c == '"') || (c == '\''))
+	      { state = 'q'; action = 'p'; quote = c; }
+	    else if (c == '\\')
+	      { state = 'x' | STATE_ESCAPE; }
+	    else
+	      { state = 'x'; }}
+	else if (state == 'q')
+	  { if (c == quote)
+	      { state = 's'; action = 'c'; }
+	    else if (c == '\\')
+	      { state |= STATE_ESCAPE; action = 'f'; }}
+	else if (state == 'x')
+	  { if ((c == ' ') || (c == '\t') || (c == '\n') || (c == '\r'))
+	      { state = 's'; action = 'c'; }
+	    else if (c == '\\')
+	      { state |= STATE_ESCAPE; action = 'f'; }
+	    else if ((c == '"') || (c == '\''))
+	      { state = 'q'; action = 'c'; quote = c; }}
+
+	if ((action == 'c') || (action == 'f')) // copy or flush
+	  { memcpy (buf_new_cur, buf, buf_cur - buf);
+	    buf_new_cur += buf_cur - buf;
+	    buf = buf_cur + 1;
+	    if (action == 'c') // copy
+	      { *buf_new_cur = 0; // NULL terminate
+		buf_new_cur ++; }}
+	else if (action == 'p') // pass
+	  { buf++; }}
+
+    *buf_new_cur = 0; // NULL terminate
+    return str_list_from_pack (&buf_new, buf_new + buf_size); }
+
+void* str_list_to_pack (char** buf_cur, const char* buf_lim, struct str_list* lst)
+  { char* buf = *buf_cur;
+    char* cur;
+    for (cur = str_list_pop (&lst);
+	 cur;
+	 cur = str_list_pop (&lst))
+      { buf = strlcpy_p (buf, cur, buf_lim); }
+    buf = strlcpy_p (buf, NULL, buf_lim);
+    *buf_cur = buf;
+    return buf; }
+
+struct str_list* str_list_from_pack (char** buf_cur, const char* buf_lim)
+  { char* buf = *buf_cur;
+    int l;
+    struct str_list* lst = NULL;
+    for (; *buf; )
+      { if ((l = strnlen (buf, buf_lim - buf)) < buf_lim - buf)
+	  { lst = str_list_cons (buf, lst);
+	    buf += l + 1; } // skip the string and its NULL.
+	else
+	  { break; }}
+    *buf_cur = buf + 1;
+    // str_list_nreverse (&lst);
+    return lst; }
+
 char* str_replace (char* s, char* from, char* to)
   { int size_from = strlen (from);
     int size_to = strlen (to);

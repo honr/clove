@@ -115,7 +115,7 @@ int main (int argc, char* argv[], char** envp)
 	    exit (1); }
 	argline += strspn (argline, " \t"); // skip past whitespace
 	argline = strsep (&argline, "\n\r"); // remove trailing newline
-	struct str_list* remote_args_tmp = str_split (argline, " \t");
+	struct str_list* remote_args_tmp = str_split_qe (argline, 4096); // TODO: fix hardcoded size
 	str_list_nreverse (&remote_args_tmp);
 	str_list_nconcat (&remote_args, remote_args_tmp);
 	str_list_nconcat (&remote_args, str_list_from_vec (argv, 1, argc - 1));
@@ -264,7 +264,7 @@ int main (int argc, char* argv[], char** envp)
 	for (cur = remote_args;
 	     cur;
 	     cur = cur->next)
-	  { strncpy (buf + 1, cur->str, broker_message_length - 2);
+	  { memccpy (buf + 1, cur->str, 0, broker_message_length - 2);
 	    buf[0] = 0; // means remote command, not a service.
 	    broker.sock = sock_addr_connect (SOCK_STREAM, broker.sockpath);
 	    write (broker.sock, buf, strlen (cur->str) + 2);
@@ -297,7 +297,7 @@ int main (int argc, char* argv[], char** envp)
 	  close (broker.sock); }
 
 	/* server unix path should be obtained now. */
-	strncpy (srv.sockpath, buf, 127); // TODO: fix hardcoded size
+	memccpy (srv.sockpath, buf, 0, 127); // TODO: fix hardcoded size
 	srv.sockpath[127] = 0; // TODO: fix hardcoded size
 	srv.sock = sock_addr_connect (SOCK_STREAM, srv.sockpath);
 
@@ -311,12 +311,7 @@ int main (int argc, char* argv[], char** envp)
 
 	char* buf_cur = buf;
 	char* buf_lim = buf + broker_message_length;
-	{ char* cur_arg;
-	  for (cur_arg = str_list_pop (&remote_args);
-	       cur_arg;
-	       cur_arg = str_list_pop (&remote_args))
-	    { buf_cur = strlcpy_p (buf_cur, cur_arg, buf_lim); }
-	  buf_cur = strlcpy_p (buf_cur, NULL, buf_lim); }
+	str_list_to_pack (&buf_cur, buf_lim, remote_args);
 	
 	{ int envs_size = 0;
 	  char** envs;
