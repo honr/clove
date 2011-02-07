@@ -148,51 +148,59 @@ struct str_list* str_split_n (char* str, int limit, char* delims)
     return head; }
 
 struct str_list* str_split_qe (char* buf, size_t buf_size)
-  { char *buf_cur, *buf_new_cur, c, state, action, quote;
-    char STATE_ESCAPE = 128;
-    char* buf_new = malloc (buf_size);
-    for (buf_cur = buf, buf_new_cur = buf_new, state = 's';
+  { char *buf_cur, *bufout_cur, c, state, action, quote;
+    const char STATE_ESCAPE = 2;
+    const char STATE_TOKEN  = 1;
+    const char STATE_SPACE  = 0;
+    char* bufout = malloc (buf_size);
+    for (buf_cur = buf, bufout_cur = bufout, state = STATE_SPACE, quote = 0;
 	 *buf_cur;
 	 buf_cur++)
       { c = *buf_cur;
 	action = 0;
 
-	if (state & STATE_ESCAPE)
-	  { state ^= STATE_ESCAPE; }
-	else if (state == 's')
-	  { if ((c == ' ') || (c == '\t') || (c == '\n') || (c == '\r'))
-	      { action = 'p'; } // pass
-	    else if ((c == '"') || (c == '\''))
-	      { state = 'q'; action = 'p'; quote = c; }
-	    else if (c == '\\')
-	      { state = 'x' | STATE_ESCAPE; }
+	// State Transitions:
+	if (state & STATE_ESCAPE) { state ^= STATE_ESCAPE; }
+	else if (c == '\\') { state = STATE_TOKEN | STATE_ESCAPE; action = 'f'; }
+	else if (state == STATE_SPACE)
+	  { if ((c == ' ') || (c == '\t') || (c == '\n') || (c == '\r')) { action = 'p'; } // pass
+	    else if ((c == '"') || (c == '\'')) { state = STATE_TOKEN; action = 'p'; quote = c; }
+	    else { state = STATE_TOKEN; }} // hold head
+	else if (state == STATE_TOKEN)
+	  { if (quote)
+	      { if (c == quote) { state = STATE_SPACE; action = 'c'; quote = 0; }}
 	    else
-	      { state = 'x'; }}
-	else if (state == 'q')
-	  { if (c == quote)
-	      { state = 's'; action = 'c'; }
-	    else if (c == '\\')
-	      { state |= STATE_ESCAPE; action = 'f'; }}
-	else if (state == 'x')
-	  { if ((c == ' ') || (c == '\t') || (c == '\n') || (c == '\r'))
-	      { state = 's'; action = 'c'; }
-	    else if (c == '\\')
-	      { state |= STATE_ESCAPE; action = 'f'; }
-	    else if ((c == '"') || (c == '\''))
-	      { state = 'q'; action = 'c'; quote = c; }}
+	      { if ((c == ' ') || (c == '\t') || (c == '\n') || (c == '\r')) { state = STATE_SPACE; action = 'c'; }
+		else if ((c == '"') || (c == '\'')) { state = STATE_TOKEN; action = 'c'; quote = c; }}}
 
 	if ((action == 'c') || (action == 'f')) // copy or flush
-	  { memcpy (buf_new_cur, buf, buf_cur - buf);
-	    buf_new_cur += buf_cur - buf;
-	    buf = buf_cur + 1;
+	  { memcpy (bufout_cur, buf, buf_cur - buf);
+	    bufout_cur += buf_cur - buf;
+	    buf = buf_cur;
 	    if (action == 'c') // copy
-	      { *buf_new_cur = 0; // NULL terminate
-		buf_new_cur ++; }}
-	else if (action == 'p') // pass
+	      { *bufout_cur = 0; // NULL terminate
+		bufout_cur ++; }}
+	if (action)
 	  { buf++; }}
 
-    *buf_new_cur = 0; // NULL terminate
-    return str_list_from_pack (&buf_new, buf_new + buf_size); }
+    // Termination:
+    if (state & STATE_ESCAPE)
+      { fprintf (stderr, "Error: Tried to escape end-of-line.\n"
+		 "       Reading next line is not implemented, yet.\n"); } // TODO: read next line.
+    else if (state == STATE_TOKEN)
+      { if (quote)
+	  { fprintf (stderr, "Error: Tried to extend quotation to the next line.\n"
+		     "       Reading next line is not implemented, yet.\n"); }
+	else
+	  { memcpy (bufout_cur, buf, buf_cur - buf);
+	    bufout_cur += buf_cur - buf;
+	    buf = buf_cur + 1; // redundant
+	    *bufout_cur = 0; // NULL terminate
+	    bufout_cur ++; }}
+    // End.
+
+    *bufout_cur = 0; // NULL terminate
+    return str_list_from_pack (&bufout, bufout + buf_size); }
 
 void* str_list_to_pack (char** buf_cur, const char* buf_lim, struct str_list* lst)
   { char* buf = *buf_cur;
