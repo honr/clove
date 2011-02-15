@@ -16,7 +16,7 @@ const char* clove_version = "0.0.1";
 int usage (int n)
   { printf ("usage:\n"
 	    " clove [--wipe-broker|--wipe-services|--extraenv <extra env>] <rest args>\n"
-	    " <rest args> can be the following forms"
+	    " <rest args> can be the following forms\n"
 	    " clove --remote <command issued to the clove daemon>\n"
 	    " clove --help\n"
 	    " clove --version\n"
