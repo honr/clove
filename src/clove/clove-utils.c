@@ -39,20 +39,22 @@ char* strndup (char const *s, size_t n)
 #endif
 
 inline char* strlcpy_p (char* dest, const char* src, const char* dest_limit)
-/* If dest is NULL do nothing and just return NULL.  Otherwise, copy
-   the string from src to dest, up to a certain point in dest (the
-   memory location of the limit is passed to the function).  If '\0'
-   does not occur within that range (src string is too long), return
-   NULL.
+/* If dest is NULL do nothing and just return NULL.  Otherwise,
+   prepend the character `S' and copy the string from src to dest, up
+   to a certain point in dest (the memory location of the limit is
+   passed to the function).  If '\0' does not occur within that range
+   (src string is too long), return NULL.
    Also, if src is NULL, only a 0 is appended at the end of dest. */
-  { char* ret = dest;
-    int n = dest_limit - dest - 1;
-    if (dest && (n > 0))
+  { int n = dest_limit - dest - 1;
+    if (dest && (n > 1))
       { if (src)
-	  { ret = memccpy (dest, src, 0, n); }
+	  { *(dest++) = 'S';
+	    dest = memccpy (dest, src, 0, n); }
 	else // only append a 0 at the dest.
-	  { *(ret++) = 0; }}
-    return ret; }
+	  { *(dest++) = 0; }
+	return dest; }
+    else
+      { return NULL; }}
 
 inline char* str_beginswith (char* haystack, char* needle)
   { register char* cur1;

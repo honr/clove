@@ -83,7 +83,7 @@
 	       (recur (conj v (let [ba (make-array Byte/TYPE len)]
 				(.get bb-dup ba 0 len)
 				(.get bb-dup)
-				(String. #^bytes ba)))))))))))
+				(.substring (String. #^bytes ba) 1)))))))))))
 
 (defn obtain-remote-context [sock]
   (if-let [data (CloveNet/read sock message-length)]
