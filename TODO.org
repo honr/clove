@@ -8,6 +8,9 @@ See also https://github.com/honr/clove/issues
 *** take out hard coded numbers
     Use PATH_MAX, ARG_MAX, etc.
 *** define specs for a clove service
+*** fix FD passing. 
+    - terminate subthreads, 
+    - revoke fd permissions when client is terminated
 *** take care of deleting socket paths
 *** fix the fd close, garbage collection
 *** modularize clove-utils.c into several pieces.

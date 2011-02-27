@@ -34,35 +34,37 @@ endif
 ARCHI := $(PLATFORM)-$(UNAMEM)
 
 
-all: dirs build/bin/clove build/clove.jar
+all: dirs build/bin/$(ARCHI)/clove build/lib/$(ARCHI)/libCloveNet.$(LIBEXT) build/clove.jar
 
-dirs: build build/obj build/bin build/lib
+dirs: build build/obj/$(ARCHI) build/bin/$(ARCHI) build/lib/$(ARCHI)
 build:
 	mkdir -p $@
-build/obj:
+build/obj/$(ARCHI):
 	mkdir -p $@
-build/bin:
+build/bin/$(ARCHI):
 	mkdir -p $@
-build/lib:
+build/lib/$(ARCHI):
 	mkdir -p $@
 
-build/obj/clove-utils.o: src/clove/clove-utils.c src/clove/clove-utils.h
+build/obj/$(ARCHI)/clove-utils.o: src/clove/clove-utils.c src/clove/clove-utils.h
 	gcc $(CFLAGS) -c -o $@ $<
 
-build/obj/clove.o: src/clove/clove.c src/clove/clove-utils.h
+build/obj/$(ARCHI)/clove.o: src/clove/clove.c src/clove/clove-utils.h
 	gcc $(LIB_PTHREAD) $(CFLAGS) -c -o $@ $<
 
-build/bin/clove: build/obj/clove.o build/obj/clove-utils.o
+build/bin/$(ARCHI)/clove: build/obj/$(ARCHI)/clove.o build/obj/$(ARCHI)/clove-utils.o
 	gcc $(LIB_PTHREAD) $(CFLAGS) $^ -o $@
 
-build/clove.jar: src/clove/*.java
+build/include/clove_CloveNet.h: src/clove/*.java
 	javac -d build -g:none -target 1.6 src/clove/*.java 
 # TODO: ^^ find the option to includeJavaRuntime
-
 	javah -d build/include -classpath build clove.CloveNet
-	gcc -Wall -fPIC -c $(INCLUDESJAVA) src/clove/CloveNet.c -o build/CloveNet.o
-	gcc -o build/lib/libCloveNet.$(LIBEXT) $(LIBSWITCH) build/CloveNet.o
 
+build/lib/$(ARCHI)/libCloveNet.$(LIBEXT): build/include/clove_CloveNet.h
+	gcc -Wall -fPIC -c $(INCLUDESJAVA) src/clove/CloveNet.c -o build/obj/$(ARCHI)/CloveNet.o
+	gcc -o build/lib/$(ARCHI)/libCloveNet.$(LIBEXT) $(LIBSWITCH) build/obj/$(ARCHI)/CloveNet.o
+
+build/clove.jar: build/include/clove_CloveNet.h
 	cd build ; jar cf clove.jar clove/*.class
 #	jar cf clove.jar -C build clove/*.class
 #	stupid jar! Could have an option to strip directory ("build" here)
@@ -73,8 +75,8 @@ install: all
 	install -d $(INSTALLDIR)/bin/$(ARCHI)
 	install -d $(INSTALLDIR)/lib/$(ARCHI)
 	install -d $(INSTALLDIR)/share/java
-	install build/bin/clove $(INSTALLDIR)/bin/$(ARCHI)
-	install build/lib/libCloveNet.$(LIBEXT) $(INSTALLDIR)/lib/$(ARCHI)
+	install build/bin/$(ARCHI)/clove $(INSTALLDIR)/bin/$(ARCHI)
+	install build/lib/$(ARCHI)/libCloveNet.$(LIBEXT) $(INSTALLDIR)/lib/$(ARCHI)
 	install build/clove.jar $(INSTALLDIR)/share/java
 
 	install -d $(INSTALLDIR)/share/clove
