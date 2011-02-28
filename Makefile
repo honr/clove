@@ -80,9 +80,9 @@ install: all
 	install build/clove.jar $(INSTALLDIR)/share/java
 
 	install -d $(INSTALLDIR)/share/clove
-	install clove.conf $(INSTALLDIR)/share/clove
-	install clove-clojure $(INSTALLDIR)/share/clove
-	install clove-clojure.conf $(INSTALLDIR)/share/clove
+	install share/clove/clove.conf $(INSTALLDIR)/share/clove
+	install share/clove/clove-clojure $(INSTALLDIR)/share/clove
+	install share/clove/clove-clojure.conf $(INSTALLDIR)/share/clove
 
 clean:
 	-rm -Rf build
