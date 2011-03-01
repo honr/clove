@@ -1,0 +1,108 @@
+[Clove](http://hovel.ca/clove) is a small daemon and its corresponding
+client that runs services and takes care of communications with them
+over AF_UNIX sockets.  Additionally, a java native library is included
+that allows you to write clove services using JVM.  Also, a
+clove-clojure service is included that helps you start and use a
+Clojure instance.  Clove is particularly useful for running scripts on
+a common JVM instance in a *nix environment.
+
+Installation
+------------
+
+    $ git clone git://github.com/honr/clove.git
+    $ cd clove
+    $ make install
+
+You may also download prebuilt packages from [http://hovel.ca/clove/download.html](http://hovel.ca/clove/download.html), e.g.:
+    
+    $ curl -O http://hovel.ca/clove/pack/clove-prebuilt-0.0.1.zip
+    $ unzip clove-prebuilt-0.0.1.zip
+    $ cd clove
+    $ ./install-script
+
+Note: currently there are some hardcoded assumptions about where we
+install clove and which paths are significant.  We expect to fix this
+ugliness soon.  In short, we install everything under `~/.local/`, and
+use `~/.local/var/run/clove/` for AF_UNIX socket paths.
+
+Using Clove
+-----------
+
+We assume that you have something like the following in your
+`~/.bashrc`, effectively adding two directories to your `PATH`:
+
+    SYSOSTYPE="$(uname)"
+    case "${SYSOSTYPE}" in
+        Darwin)
+    	SYSOSTYPE=mac
+    	;;
+        Linux)
+    	SYSOSTYPE=linux
+    	;;
+    esac
+    
+    CPUARCH="$(uname -m)"
+    case "${CPUARCH}" in
+        i*86)
+    	CPUARCH=x86
+    	;;
+    esac
+    SYSARCH="${SYSOSTYPE}-${CPUARCH}"
+    
+    export PATH="${HOME}/.local/bin/${SYSARCH}:${HOME}/.local/bin:${PATH}"
+
+Now you can run the clove daemon:
+
+    $ clove -d
+
+Currently, you might want to run the clove daemon in a screen session
+to be able to see some debugging output.  In the future you are going
+to have a choice for sending the output to the syslog facility.
+
+Once the daemon is running, you can use it:
+
+    $ clove -c clojure -e "(+ 1 2 4 8)"
+
+Clove Services and their Configuration Files
+--------------------------------------------
+
+Each clove service is an executable file in your path, for instance
+`~/.local/share/clove/clove-clojure`. Each service can (and should)
+have a configuration file outlining how to run it (shebang), and what
+environment variables to set.  Parsing is very rudimentary:
+
+* The shebang line is used to exec the rest of the file (more than two
+  args are also accepted).
+* The rest of the file shows what environment variables to set.
+  example:
+
+      LD_LIBRARY_PATH=~/.local/lib
+
+  In order to differentiate the environment variables based on the OS
+  and CPU architecture, you can start lines with `/` with the
+  following format:
+
+      /$(uname) $(uname -m)/envvar=...
+
+  for example:
+
+      /Linux x86/LD_LIBRARY_PATH=~/.local/lib/linux-x86
+
+  sets the environment variable `LD_LIBRARY_PATH` to
+  `$HOME/.local/lib/linux-x86`, only on the Linux x86 platform.
+
+* Except for the first line (i.e., the shebang line), the `#`
+  character start a comment until the end of the line.
+
+COPYING and License
+-------------------
+
+Copyright (c) Ali Honarvar.  All rights reserved.
+
+The use and distribution terms for Clove are covered by either
+the GNU Public License version 3 or later
+(GPLv3+ [http://www.gnu.org/licenses/gpl.html](http://www.gnu.org/licenses/gpl.html))
+included in the file COPYING-GPL-3,
+or 
+the Eclipse Public License 1.0 
+([http://opensource.org/licenses/eclipse-1.0.php](http://opensource.org/licenses/eclipse-1.0.php)).

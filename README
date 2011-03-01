@@ -11,20 +11,28 @@
 ;; the Eclipse Public License 1.0 
 ;; (http://opensource.org/licenses/eclipse-1.0.php).
 
-* What is Clove:
+* What is Clove
+
 Clove is a small daemon and its corresponding client that runs
 services and takes care of communications with them over AF_UNIX sockets.
 Additionally, a java native library is included that allows you to
 write clove services using JVM.
-Also, a clove-clojure service is included that let's you start and use
-a Clojure instance.
+Also, a clove-clojure service is included that helps you start and use
+a Clojure instance. Clove is particularly useful for running scripts
+on a common JVM instance in a *nix environment.
 
+* Installation
 
-* Obtaining Clove:
 $ git clone git://github.com/honr/clove.git
-
-* Installation:
+$ cd clove
 $ make install
+
+You may also download prebuilt packages from [http://hovel.ca/clove/download.html](http://hovel.ca/clove/download.html), e.g.:
+    
+$ curl -O http://hovel.ca/clove/pack/clove-prebuilt-0.0.1.zip
+$ unzip clove-prebuilt-0.0.1.zip
+$ cd clove
+$ ./install-script
 
 Note: currently there are some hardcoded assumptions about where we
       install clove and which paths are significant.  We expect to fix
@@ -32,7 +40,8 @@ Note: currently there are some hardcoded assumptions about where we
       ~/.local/, and use ~/.local/var/run/clove/ for AF_UNIX socket
       paths.
 
-* Using Clove:
+* Using Clove
+
 We assume that you have something like the following in your
 ~/.bashrc, effectively adding two directories to your PATH:
 
