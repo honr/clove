@@ -74,10 +74,10 @@ INSTALLDIR := $(HOME)/.local
 install: all
 	install -d $(INSTALLDIR)/bin/$(ARCHI)
 	install -d $(INSTALLDIR)/lib/$(ARCHI)
-	install -d $(INSTALLDIR)/share/java
+	install -d $(INSTALLDIR)/share/java/top-jar
 	install build/bin/$(ARCHI)/clove $(INSTALLDIR)/bin/$(ARCHI)
 	install build/lib/$(ARCHI)/libCloveNet.$(LIBEXT) $(INSTALLDIR)/lib/$(ARCHI)
-	install build/clove.jar $(INSTALLDIR)/share/java
+	install build/clove.jar $(INSTALLDIR)/share/java/top-jar
 
 	install -d $(INSTALLDIR)/share/clove
 	install share/clove/clove.conf $(INSTALLDIR)/share/clove
