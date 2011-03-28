@@ -25,8 +25,8 @@
 (def sockpath
   (str (System/getProperty "user.home")
        "/.local/var/run/clove/clove-clojure"))
+
 (def sock (atom nil))
-(def sock-alive (atom nil))
 
 (def ^{:private true} old-security-manager (System/getSecurityManager))
 
@@ -35,17 +35,17 @@
    (CloveSecurityManager.
     (System/getSecurityManager)))
   (reset! sock (CloveNet/sock_addr_bind 1 (.getBytes sockpath) 1))
-  (reset! sock-alive true)
   ;; let the broker know we are ready. broker uses this message to
   ;; synchronize, so it is important that we send a message.
   (println "Ready."))
 
 (defn- terminate [n]
-  (reset! sock-alive false)
-  (.println *err* "Clove/Clojure: closing.")
-  (CloveNet/close @sock)
-  (System/setSecurityManager old-security-manager)
-  (.delete (java.io.File. sockpath))
+  (when @sock
+    (CloveNet/close @sock)
+    (.println *err* "Clove/Clojure: closing.")
+    (System/setSecurityManager old-security-manager)
+    (.delete (java.io.File. sockpath))
+    (reset! sock nil))
   (System/exit n))
 
 (def message-length 8192)
@@ -167,7 +167,7 @@
   (initialize)
   
   ;; main loop
-  (while @sock-alive
+  (while (and @sock (pos? @sock))
     (let [sock-a (CloveNet/accept @sock)]
       (when (pos? sock-a)
 	(.start (new Thread (fn [] (process-thread sock-a)))))))
