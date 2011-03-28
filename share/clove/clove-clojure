@@ -3,7 +3,7 @@
 ;; apparently BSD's execve and Linux's execve are different, and the
 ;; body of this script is not being executed in BSD.
 
-(ns service.clojure
+(ns clove.clojure
   (:require [clojure.main])
   (:import [clove CloveSecurityManager CloveExitException CloveNet]))
 
@@ -18,34 +18,33 @@
 ;; (intern 'clojure.core '*username* nil)
 (in-ns 'user)
 (refer 'clojure.core)
-(in-ns 'service.clojure)
+(in-ns 'clove.clojure)
 
 ;; (set! *warn-on-reflection* true)
 
-(def nom "clojure")
 (def sockpath
-     (str (System/getProperty "user.home")
-	  "/.local/var/run/clove/clove-" nom))
-
+  (str (System/getProperty "user.home")
+       "/.local/var/run/clove/clove-clojure"))
 (def sock (atom nil))
+(def sock-alive (atom nil))
 
-(def old-security-manager (System/getSecurityManager))
+(def ^{:private true} old-security-manager (System/getSecurityManager))
 
-(defn init []
+(defn- initialize []
   (System/setSecurityManager
    (CloveSecurityManager.
     (System/getSecurityManager)))
-  (dosync (reset! sock (CloveNet/sock_addr_bind 1 (.getBytes sockpath) 1)))
+  (reset! sock (CloveNet/sock_addr_bind 1 (.getBytes sockpath) 1))
+  (reset! sock-alive true)
   ;; let the broker know we are ready. broker uses this message to
-  ;; synchronize, so it is important.
+  ;; synchronize, so it is important that we send a message.
   (println "Ready."))
 
-(defn terminate [n]
-  (System/setSecurityManager
-   old-security-manager)
-
-  (.println *err* (str nom ": closing."))
+(defn- terminate [n]
+  (reset! sock-alive false)
+  (.println *err* "Clove/Clojure: closing.")
   (CloveNet/close @sock)
+  (System/setSecurityManager old-security-manager)
   (.delete (java.io.File. sockpath))
   (System/exit n))
 
@@ -53,23 +52,23 @@
 
 ;; TODO: See if there are any conceivable security implications for
 ;;       the following hack:
-(def FileDescriptor-fd-field
-     (.getDeclaredField java.io.FileDescriptor "fd"))
+(def ^{:private true} FileDescriptor-fd-field
+  (.getDeclaredField java.io.FileDescriptor "fd"))
 (.setAccessible FileDescriptor-fd-field true)
 
 ;; (printlnfd (str (.fd (java.io.FileDescriptor.))))
 
-(defn fd-get-num [#^java.io.FileDescriptor fd]
+(defn- fd-get-num [#^java.io.FileDescriptor fd]
   (.getInt FileDescriptor-fd-field fd))
 
-(defn obtain-remote-fds [sock]
+(defn- obtain-remote-fds [sock]
   (when-let [remote-fds-ba (CloveNet/unix_recv_fds sock)]
     (let [[fd-in fd-out fd-err] (seq remote-fds-ba)]
      {:in  fd-in
       :out fd-out
       :err fd-err})))
 
-(defn read-ab-string-vector [#^java.nio.ByteBuffer bb]
+(defn- read-ab-string-vector [#^java.nio.ByteBuffer bb]
   ;; TODO: watch out for unicode!
     (let [bb-dup (.duplicate bb)]
      (loop [v []]
@@ -85,7 +84,7 @@
 				(.get bb-dup)
 				(.substring (String. #^bytes ba) 1)))))))))))
 
-(defn obtain-remote-context [sock]
+(defn- obtain-remote-context [sock]
   (if-let [data (CloveNet/read sock message-length)]
     (let [data (java.nio.ByteBuffer/wrap data)]
       [(read-ab-string-vector data)
@@ -93,17 +92,15 @@
 		       (vec (take 2 (conj (vec (.split s "=" 2)) nil))))
 		     (read-ab-string-vector data)))])))
 
-(def running (atom true))
-
 ;; TODO: terminate thread when certain errors occur.
-(defn process-thread [sock]
+(defn- process-thread [sock]
   (try
     (if-let [fds (obtain-remote-fds sock)]
       (let [[args env] (obtain-remote-context sock)]
 
 	(cond (= (first args) "-q") (terminate 0)
-	      (= (first args) "--ping") (println "Yes darling. What is it?")
-	      :default
+	      (= (first args) "--ping") (println "Yes darling; What is it?")
+	      :else
 	      (do
 		(.println *err* (apply format "[%d %d %d] open"
 				       (map fd-get-num (vals fds))))
@@ -121,10 +118,14 @@
 				(java.io.InputStreamReader.
 				 (java.io.FileInputStream. (fds :in))))]
 		  (try
-		    (let [fa (first args)]
-		      (if (and fa (not (.startsWith fa "-")) (not (.startsWith fa "/")))
+		    (let [first-arg (first args)]
+		      (if (and first-arg
+			       (not (.startsWith first-arg "-"))
+			       (not (.startsWith first-arg "/")))
 			;; if the first arg is a path, get the absolute path with regards to cwd.
-			(apply clojure.main/main (.getCanonicalPath (java.io.File. clojure.core/*cwd* fa)) (rest args))
+			(apply clojure.main/main (.getCanonicalPath
+						  (java.io.File. clojure.core/*cwd* first-arg))
+			       (rest args))
 			(apply clojure.main/main args)))
 		       ;; (catch java.io.IOException e nil)
 		       (catch CloveExitException e nil)
@@ -154,18 +155,23 @@
 	;; (libc/shutdown sock)
 	;; (CloveNet/close (fd-get-num (:out fds)))
 	(CloveNet/close sock)
-	(System/gc)    ; darn! We should never need to call System/gc.
-					; Instead, we should find a way to politely ask java to
-					; garbage collect the file descriptors.
+	(System/gc)  ;; darn! We should never need to call System/gc.
+	;; Instead, we should find a way to politely ask java to
+	;; garbage collect the file descriptors.
 	)
       (.println *err* "Unable to obtain remote fds."))
     (catch Exception e nil
-	   (.printStackTrace e *err*)
-	   )))
+	   (.printStackTrace e *err*))))
 
-(init)
-(while @running
-  ;; (.println *err* (str "ready to accept on socket " @sock))
-  (let [sock-a (CloveNet/accept @sock)]
-    (.start (Thread. (fn [] (process-thread sock-a))))))
-(terminate 0)
+(defn- main []
+  (initialize)
+  
+  ;; main loop
+  (while @sock-alive
+    (let [sock-a (CloveNet/accept @sock)]
+      (when (pos? sock-a)
+	(.start (new Thread (fn [] (process-thread sock-a)))))))
+  
+  (terminate 0))
+
+(main)
