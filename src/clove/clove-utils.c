@@ -3,21 +3,6 @@
 char* RTPREFIX = "~/.local";
 // getenv ("RTPREFIX");
 
-#ifdef DEBUG
-struct timespec
-gettimeofday_ts ()
-  { struct timeval now_tv;
-    gettimeofday (&now_tv, NULL);
-    struct timespec now_ts = {now_tv.tv_sec, (long) now_tv.tv_usec * 1000};
-    return now_ts; }
-
-char *
-timespec_to_str (struct timespec ts)
-  { char * s = (char *) malloc (256); // TODO: fix hardcoded size
-    sprintf (s, "%ld.%ld", ts.tv_sec, ts.tv_nsec);
-    return s; }
-#endif // DEBUG
-
 // for OSX
 #ifndef _GNU_SOURCE
 

@@ -36,25 +36,8 @@
 #define true 1
 #define false 0
 
-#define RED(x)    "\033[31m" x "\033[00m"
-#define GREEN(x)  "\033[32m" x "\033[00m"
-#define YELLOW(x) "\033[33m" x "\033[00m"
-#define BLUE(x)   "\033[34m" x "\033[00m"
-
 #define CONFLINE_MAX 8192
 // maximum size of each line in the config file.
-
-#define DEBUG
-
-#ifdef DEBUG
-#define DBG(format, args...) fprintf (stderr, RED ("%s:%-5d %s> ") format "\n", __FILE__, __LINE__, timespec_to_str (gettimeofday_ts ()), args)
-
-struct timespec
-gettimeofday_ts ();
-
-char *
-timespec_to_str (struct timespec ts);
-#endif // DEBUG
 
 #ifndef _GNU_SOURCE
 size_t
