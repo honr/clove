@@ -41,11 +41,14 @@
 
 #ifndef _GNU_SOURCE
 size_t
-strnlen(const char *s, size_t len);
+strnlen (const char *s, size_t len);
 
 char*
 strndup (char const *s, size_t n);
 #endif // _GNU_SOURCE
+
+char* RTPREFIX; // has to be defined in your code. e.g.: = "~/.local";
+char* RUNPATH; // same.  e.g.: = "~/.local/var/run/clove";
 
 inline char*
 str_beginswith (char* haystack, char* needle);
@@ -114,9 +117,14 @@ str_list_from_pack (char** buf_cur, const char* buf_lim);
    buffer.  buf_lim shows the extent right before which we read the
    input buffer. */
 
+
+char*
+str_concat (char* s1, char* s2);
+/* return concatenation of s1 and s2. modify none. */
+
 char*
 str_replace (char* s, char* from, char* to);
-// create a new string with all instances of from replace to to.
+/* create a new string with all instances of from replace to to. */
 
 inline char*
 strlcpy_p (char* dest, const char* src, const char* dest_limit);
@@ -128,8 +136,8 @@ strlcpy_p (char* dest, const char* src, const char* dest_limit);
    Also, if src is NULL, only a 0 is appended at the end of dest. */
 
 char*
-rtprefix ();
-/* real time prefix. Could be "" or "$HOME/.local" or some such. */
+expand_file_name (char* filename);
+/* replace ~ with $HOME */
 
 struct remote_fds {
   int in;

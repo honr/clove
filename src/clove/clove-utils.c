@@ -1,8 +1,5 @@
 #include "clove-utils.h"
 
-char* RTPREFIX = "~/.local";
-// getenv ("RTPREFIX");
-
 // for OSX
 #ifndef _GNU_SOURCE
 
@@ -214,6 +211,16 @@ struct str_list* str_list_from_pack (char** buf_cur, const char* buf_lim)
     // str_list_nreverse (&lst);
     return lst; }
 
+char* str_concat (char* s1, char* s2)
+  { int size_1 = strlen (s1);
+    int size_2 = strlen (s2);
+    char* res = (char*) malloc (size_1 + size_2 + 1);
+    char* resp = res;
+    memcpy (resp, s1, size_1); resp += size_1;
+    memcpy (resp, s2, size_2); resp += size_2;
+    *resp = 0;
+    return res; }
+
 char* str_replace (char* s, char* from, char* to)
   { int size_from = strlen (from);
     int size_to = strlen (to);
@@ -224,7 +231,7 @@ char* str_replace (char* s, char* from, char* to)
     //         result.
     for (cur = strstr (s, from), i = 0;
 	 cur && *cur;
-	 cur = strstr(cur + size_from, from), i++);
+	 cur = strstr (cur + size_from, from), i++);
     char* res = (char*) malloc (size_s + (size_to - size_from) * i + 1);
     char* resp = res;
     // pass 2: copy.
@@ -240,8 +247,8 @@ char* str_replace (char* s, char* from, char* to)
 
     return res; }
 
-char* rtprefix ()
-  { return str_replace (RTPREFIX, "~", getenv ("HOME")); }
+char* expand_file_name (char* filename)
+  { return str_replace (filename, "~", getenv ("HOME")); }
 // sprintf (path, "%s/.local", getenv ("HOME"));
 
 struct sockaddr_gen addr_unix (int type, const char* sockpath)
@@ -385,18 +392,10 @@ int unix_recv_fds(int sock, struct remote_fds* iofds_p)
 
     return ret; }
 
-char* service_socket_path_dir ()
-  { char* path = malloc (PATH_MAX);
-    // TODO: use a path under /tmp to avoid going through nfs if home is remote.
-    if (snprintf (path, PATH_MAX, "%s/var/run/clove", rtprefix ()) >= PATH_MAX)
-      { perror ("snprintf rtprefix too large; service_socket_path_dir would become too large");
-	exit (2); };
-    return path; }
-
 struct service
 service_init (char* service_name)
   { struct service s;
-    char* prefix = rtprefix ();
+    char* prefix = expand_file_name (RTPREFIX);
     s.name = service_name;
     s.confpath = malloc (PATH_MAX);
     s.binpath  = malloc (PATH_MAX);
@@ -405,11 +404,11 @@ service_init (char* service_name)
     if (strcmp (s.name, "broker") == 0)
       { sprintf (s.confpath, "%s/share/clove/clove.conf", prefix);
 	s.binpath = NULL;
-	sprintf (s.sockpath, "%s/broker", service_socket_path_dir ()); }
+	sprintf (s.sockpath, "%s/broker", expand_file_name (RUNPATH)); }
     else
       { sprintf (s.confpath, "%s/share/clove/clove-%s.conf", prefix, s.name);
 	sprintf (s.binpath,  "%s/share/clove/clove-%s", prefix, s.name);
-	sprintf (s.sockpath, "%s/clove-%s", service_socket_path_dir (), s.name); }
+	sprintf (s.sockpath, "%s/clove-%s", expand_file_name (RUNPATH), s.name); }
 
     s.confpath_last_mtime = 0;
     s.pid = -1;
@@ -436,6 +435,8 @@ service_call (struct service srv, char** default_envp)
 	//   - start, stop, restart, status on a service
 	if (access (srv.confpath, F_OK) == 0)
 	  { struct serviceconf* sc = parse_conf_file (srv.confpath);
+	    service_envp = envp_dup_update_or_add
+	      (service_envp, str_list_cons (str_concat ("CLOVESOCKET=", srv.sockpath), NULL));
 	    service_envp = envp_dup_update_or_add (service_envp, sc->envs);
 	    // TODO: make sure this is working properly.  Apparently
 	    //       the order of a duplicate env vars is different
@@ -590,8 +591,8 @@ int makeancesdirs (char* path)
 	     q;
 	     q = strchr (p, '/'))
 	  { *q = 0;
-	    mkdir (path_dup, 01777); // TODO: fix hardcoded value
-	    // TOOD: make sure the mode 01777 is OK for all platforms.
+	    mkdir (path_dup, 0700); // TODO: fix hardcoded value
+	    // TOOD: make sure the mode 0777 or 01777 is OK for all platforms.
 	    *q = '/';
 	    p = q + 1; }
 	free (path_dup);

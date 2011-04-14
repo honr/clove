@@ -22,9 +22,7 @@
 
 ;; (set! *warn-on-reflection* true)
 
-(def sockpath
-  (str (System/getProperty "user.home")
-       "/.local/var/run/clove/clove-clojure"))
+(def sockpath (System/getenv "CLOVESOCKET"))
 
 (def sock (atom nil))
 

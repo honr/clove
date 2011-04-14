@@ -13,9 +13,13 @@
 
 const char* clove_version = "0.0.1";
 
+/* defined in clove-utils.h */
+extern char* RTPREFIX;
+extern char* RUNPATH;
+
 int usage (int n)
   { printf ("usage:\n"
-            " clove [--wipe-broker|--wipe-services|--extraenv <extra env>] <rest args>\n"
+            " clove [--wipe-broker|--wipe-services|--extraenv <extra env>|--runpath <run path>] <rest args>\n"
             " <rest args> can be the following forms\n"
             " clove --remote <command issued to the clove daemon>\n"
             " clove --help\n"
@@ -37,6 +41,7 @@ int main (int argc, char* argv[], char** envp)
        {"daemon-fg",  0, 0, 'D'},
        {"list",       0, 0, 'l'},
        {"extraenv",   1, 0, 'x'},
+       {"runpath",    1, 0, 'p'},
        {"force-wipe", 0, 0, 'w'},
        {"remote",     1, 0, 'r'},
        {"client",     1, 0, 'c'},
@@ -47,7 +52,9 @@ int main (int argc, char* argv[], char** envp)
     int c;
     int option_index = 0;
     struct str_list* extraenvs = NULL;
-    struct service broker = service_init ("broker");
+    RTPREFIX = "~/.local";
+    RUNPATH = str_concat ("/tmp/clove-", getenv ("USER"));
+    struct service broker;
     struct str_list* remote_args = NULL;
 
     int force_wipe_sockpaths = false;
@@ -61,11 +68,14 @@ int main (int argc, char* argv[], char** envp)
       { opt_keep_processing = false; }
 
     while (opt_keep_processing &&
-           ((c = getopt_long (argc, argv, "x:wdDlr:c:hv",
+           ((c = getopt_long (argc, argv, "x:p:wdDlr:c:hv",
                               long_options, &option_index)) != -1))
       { switch (c)
           { case 'x':
               extraenvs = str_list_cons (optarg, extraenvs);
+              break;
+	    case 'p':
+              RUNPATH = optarg;
               break;
             case 'w':
               force_wipe_sockpaths = true;
@@ -91,6 +101,8 @@ int main (int argc, char* argv[], char** envp)
               exit (0);
             default:
               usage (1); }}
+
+    broker= service_init ("broker");
 
     if (mode == 0)
       { mode = 'c';
@@ -150,7 +162,7 @@ int main (int argc, char* argv[], char** envp)
         
             // wipe service socket paths.
             { char* dp_fullpath = (char*) malloc (PATH_MAX);
-              strcpy (dp_fullpath, service_socket_path_dir ());
+              strcpy (dp_fullpath, expand_file_name (RUNPATH));
               DIR* dirp;
               if ((dirp = opendir (dp_fullpath)) != NULL)
                 { char* dp_fullpath_suf = dp_fullpath + strlen (dp_fullpath);
@@ -268,7 +280,7 @@ int main (int argc, char* argv[], char** envp)
           break;
 
         case 'l':
-          { char* rgv[] = { "ls", "-lA", service_socket_path_dir (), NULL };
+          { char* rgv[] = { "ls", "-lA", expand_file_name (RUNPATH), NULL };
             execve ("/bin/ls", rgv, NULL); }
           break;
         
