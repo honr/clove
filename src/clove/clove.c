@@ -53,7 +53,9 @@ int main (int argc, char* argv[], char** envp)
     int option_index = 0;
     struct str_list* extraenvs = NULL;
     RTPREFIX = "~/.local";
-    RUNPATH = str_concat ("/tmp/clove-", getenv ("USER"));
+    /* RUNPATH = str_concat ("/tmp/clove-", getenv ("USER")); */
+    RUNPATH = malloc (128);
+    sprintf (RUNPATH, "/tmp/clove-%d", geteuid ());
     struct service broker;
     struct str_list* remote_args = NULL;
 
