@@ -53,13 +53,13 @@ We assume that you have something like the following in your
 
 Now you can run the clove daemon:
 
-    $ clove -d
+    $ clove-daemon
 
 Currently, you might want to run the clove daemon in a screen session
 to be able to see some debugging output.  In the future you are going
 to have a choice for sending the output to the syslog facility.
 
-Once the daemon is running, you can use it:
+Once the daemon is running, you can use clove:
 
     $ clove -c clojure -e "(+ 1 2 4 8)"
 
