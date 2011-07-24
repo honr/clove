@@ -3,12 +3,14 @@
 // for OSX
 #ifndef _GNU_SOURCE
 
-size_t strnlen(const char *s, size_t len)
+size_t
+strnlen(const char *s, size_t len)
   { size_t i;
     for (i=0; i < len && *s; i++, s++);
     return i; }
 
-char* strndup (char const *s, size_t n)
+char*
+strndup (char const *s, size_t n)
   { size_t len = strnlen (s, n); // or n-1 ?
     char *t;
 
@@ -20,7 +22,8 @@ char* strndup (char const *s, size_t n)
 
 #endif
 
-inline char* strlcpy_p (char* dest, const char* src, const char* dest_limit)
+inline char*
+strlcpy_p (char* dest, const char* src, const char* dest_limit)
 /* If dest is NULL do nothing and just return NULL.  Otherwise,
    prepend the character `S' and copy the string from src to dest, up
    to a certain point in dest (the memory location of the limit is
@@ -38,7 +41,8 @@ inline char* strlcpy_p (char* dest, const char* src, const char* dest_limit)
     else
       { return NULL; }}
 
-inline char* str_beginswith (char* haystack, char* needle)
+inline char*
+str_beginswith (char* haystack, char* needle)
   { register char* cur1;
     register char* cur2;
     for (cur1 = haystack, cur2 = needle;
@@ -50,7 +54,8 @@ inline char* str_beginswith (char* haystack, char* needle)
     else
       { return NULL; }}
 
-struct str_list* str_list_cons (char* str, struct str_list* lst)
+struct str_list*
+str_list_cons (char* str, struct str_list* lst)
   { struct str_list* head =
       (struct str_list*) malloc (sizeof (struct str_list));
     head->str  = str;
@@ -74,7 +79,8 @@ str_list_from_vec (char* vec[], int beg, int end)
       { lst = str_list_cons (vec[end], lst); }
     return lst; }
 
-char* str_list_pop (struct str_list** lst)
+char*
+str_list_pop (struct str_list** lst)
   { if (lst && (*lst) && (*lst)->str)
       { char* ret = (*lst)->str;
 	(*lst) = (*lst)->next;
@@ -83,26 +89,29 @@ char* str_list_pop (struct str_list** lst)
       { return NULL; }}
 // Currently pop leaks, since the address to the next is not freed.
 
-void str_list_nreverse (struct str_list** lst)
+void
+str_list_nreverse (struct str_list** lst)
   { if (lst)
       { struct str_list* nxt;
 	struct str_list* prv = NULL;
-	while (true) 
+	while (true)
 	  { nxt = (*lst)->next;
-	    (*lst)->next = prv; 
+	    (*lst)->next = prv;
 	    prv = (*lst);
-	    if (nxt) 
+	    if (nxt)
 	      { (*lst) = nxt; }
 	    else
 	      { break; }}}}
 
-int str_list_count (struct str_list* lst)
+int
+str_list_count (struct str_list* lst)
   { int count;
     for (count = 0; lst; lst = lst->next, count ++)
       {}
     return count; }
 
-void str_list_free (struct str_list* lst)
+void
+str_list_free (struct str_list* lst)
   { struct str_list* nxt;
     while (lst)
       { nxt = lst->next;
@@ -110,7 +119,8 @@ void str_list_free (struct str_list* lst)
 	free (lst);
 	lst = nxt; }}
 
-struct str_list* str_split (char* str, char* delims)
+struct str_list*
+str_split (char* str, char* delims)
   { struct str_list* head = NULL;
     char* running = strdup (str);
     char* token;
@@ -119,7 +129,8 @@ struct str_list* str_split (char* str, char* delims)
 	  { head = str_list_cons (token, head); }}
     return head; }
 
-struct str_list* str_split_n (char* str, int limit, char* delims)
+struct str_list*
+str_split_n (char* str, int limit, char* delims)
   { struct str_list* head = NULL;
     char* running = strdup (str);
     char* token;
@@ -131,7 +142,8 @@ struct str_list* str_split_n (char* str, int limit, char* delims)
       { head = str_list_cons (running, head); }
     return head; }
 
-struct str_list* str_split_qe (char* buf, size_t buf_size)
+struct str_list*
+str_split_qe (char* buf, size_t buf_size)
   { char *buf_cur, *bufout_cur, c, state, action, quote;
     const char STATE_ESCAPE = 2;
     const char STATE_TOKEN  = 1;
@@ -186,7 +198,8 @@ struct str_list* str_split_qe (char* buf, size_t buf_size)
     *bufout_cur = 0; // NULL terminate
     return str_list_from_pack (&bufout, bufout + buf_size); }
 
-void* str_list_to_pack (char** buf_cur, const char* buf_lim, struct str_list* lst)
+void*
+str_list_to_pack (char** buf_cur, const char* buf_lim, struct str_list* lst)
   { char* buf = *buf_cur;
     char* cur;
     for (cur = str_list_pop (&lst);
@@ -197,7 +210,8 @@ void* str_list_to_pack (char** buf_cur, const char* buf_lim, struct str_list* ls
     *buf_cur = buf;
     return buf; }
 
-struct str_list* str_list_from_pack (char** buf_cur, const char* buf_lim)
+struct str_list*
+str_list_from_pack (char** buf_cur, const char* buf_lim)
   { char* buf = *buf_cur;
     int l;
     struct str_list* lst = NULL;
@@ -211,7 +225,8 @@ struct str_list* str_list_from_pack (char** buf_cur, const char* buf_lim)
     // str_list_nreverse (&lst);
     return lst; }
 
-char* str_concat (char* s1, char* s2)
+char*
+str_concat (char* s1, char* s2)
   { int size_1 = strlen (s1);
     int size_2 = strlen (s2);
     char* res = (char*) malloc (size_1 + size_2 + 1);
@@ -221,7 +236,8 @@ char* str_concat (char* s1, char* s2)
     *resp = 0;
     return res; }
 
-char* str_replace (char* s, char* from, char* to)
+char*
+str_replace (char* s, char* from, char* to)
   { int size_from = strlen (from);
     int size_to = strlen (to);
     int size_s = strlen (s);
@@ -247,11 +263,13 @@ char* str_replace (char* s, char* from, char* to)
 
     return res; }
 
-char* expand_file_name (char* filename)
+char*
+expand_file_name (char* filename)
   { return str_replace (filename, "~", getenv ("HOME")); }
 // sprintf (path, "%s/.local", getenv ("HOME"));
 
-struct sockaddr_gen addr_unix (int type, const char* sockpath)
+struct sockaddr_gen
+addr_unix (int type, const char* sockpath)
   { struct sockaddr_gen a;
     struct sockaddr_un* addr = (struct sockaddr_un*) malloc (sizeof (struct sockaddr_un));
     // printf ("path: %s\n", sockpath);
@@ -272,7 +290,8 @@ struct sockaddr_gen addr_unix (int type, const char* sockpath)
     a.protocol = 0;
     return a; }
 
-int sock_bind (struct sockaddr_gen a, int force_bind)
+int
+sock_bind (struct sockaddr_gen a, int force_bind)
   { int sock;
 
     if ((sock = socket (a.domain, a.type, a.protocol)) < 0)
@@ -313,11 +332,13 @@ int sock_connect (struct sockaddr_gen a)
 
     return sock; }
 
-int sock_addr_bind (int type, char* sockpath, int force_bind)
+int
+sock_addr_bind (int type, char* sockpath, int force_bind)
   { struct sockaddr_gen a = addr_unix (type, sockpath);
     return sock_bind (a, force_bind); }
 
-int sock_addr_connect (int type, char* sockpath)
+int
+sock_addr_connect (int type, char* sockpath)
   { struct sockaddr_gen a = addr_unix (type, sockpath);
     return sock_connect (a); }
 
@@ -325,7 +346,8 @@ int sock_addr_connect (int type, char* sockpath)
          communications if the client's uid is not the same as the
          service's. */
 
-int unix_send_fds (int sock, struct remote_fds iofds)
+int
+unix_send_fds (int sock, struct remote_fds iofds)
   { char cmsg_buf[CMSG_SPACE(sizeof(iofds))];
     char *m = "message";
     struct iovec iov = { m, strlen(m) };
@@ -349,7 +371,8 @@ int unix_send_fds (int sock, struct remote_fds iofds)
     msgh.msg_controllen = cmsg->cmsg_len;
     return sendmsg(sock, &msgh, 0); } // MSG_NOSIGNAL
 
-int unix_recv_fds(int sock, struct remote_fds* iofds_p)
+int
+unix_recv_fds(int sock, struct remote_fds* iofds_p)
   { // TODO: check buffer sizes (cmsg_buf_size, msg, iofds);
     struct iovec iov;
     int cmsg_buf_size = 128; // CMSG_SPACE(sizeof(iofds)) // TODO: fix hardcoded size
@@ -447,7 +470,7 @@ service_call (struct service srv, char** default_envp)
 		char* interpretter = service_argv[0];
 		execve (interpretter, service_argv, service_envp);
 	        exit (3); }}
-	
+
 	if (execve (srv.binpath, service_argv, service_envp) == -1)
 	  { perror ("execve");
 	    exit (3); }}
@@ -455,18 +478,19 @@ service_call (struct service srv, char** default_envp)
     printf ("waiting for %s ...\n", srv.name);
     // TODO: have a time out
     char* buf = malloc (128); // TODO: fix hardcoded size
-    read (pipefd[0], buf, 127); // TODO: fix hardcoded size
+    read (pipefd[0], buf, 127); // TODO: fix hardcoded size. check return val.
     buf[127]=0; // TODO: fix hardcoded size
     printf ("%s says: %s", srv.name, buf);
     close (pipefd[0]);
     return buf; }
 
-struct serviceconf* parse_conf_file (char* filepath)
-/* TODO: 
+struct serviceconf*
+parse_conf_file (char* filepath)
+/* TODO:
    cur_uname = uname ();
    cur_uname_m = uname ("-m");
    archmatcher="(^$(uname) $(uname -m))|(^$(uname)/)|(^/)|(^[^/]+=)|(^[^/]+$)"
-   
+
    TODO: have platform dependent interpretters.
 
    TODO: split key and value, and perform ~~ (or $THIS) replacement.
@@ -474,14 +498,14 @@ struct serviceconf* parse_conf_file (char* filepath)
   { FILE* file;
     char line_storage[CONFLINE_MAX];
 
-    struct serviceconf* sc = (struct serviceconf*) malloc 
+    struct serviceconf* sc = (struct serviceconf*) malloc
       (sizeof (struct serviceconf));
     sc->interpretter = NULL;
     sc->envs = NULL;
-    
+
     struct utsname unm;
     uname (&unm);
-    
+
     char* whitespacechars = " \f\n\r\t\v";
     if ((file = fopen (filepath, "r")))
       { while (fgets (line_storage, CONFLINE_MAX, file))
@@ -491,19 +515,19 @@ struct serviceconf* parse_conf_file (char* filepath)
 		char* platform_specifier;
 		platform_specifier = strsep (&line, "/");
 		// fprintf (stderr, "specifier: %s\n", platform_specifier);
-		if ((*platform_specifier) && 
-		    ((platform_specifier = str_beginswith 
+		if ((*platform_specifier) &&
+		    ((platform_specifier = str_beginswith
 		      (platform_specifier, unm.sysname)) == NULL))
 		  { // fprintf (stderr, "sysname does not match\n");
 		    continue; }
 		if (*platform_specifier)
 		  { platform_specifier ++; /* move past delimeter */ }
 		if ((*platform_specifier) &&
-		    ((platform_specifier = str_beginswith 
+		    ((platform_specifier = str_beginswith
 		      (platform_specifier, unm.machine)) == NULL))
 		  { // fprintf (stderr, "machine does not match\n");
 		    continue; }}
-	    
+
 	    /* if the line starts with a '/', there must be another
 	       '/' somewhere after that.  take the string between the
 	       two '/'s as platform specifier, and drop the line
@@ -515,8 +539,8 @@ struct serviceconf* parse_conf_file (char* filepath)
 	    if (sc->interpretter == NULL)
 	      { char* line1 = str_beginswith (line, "#!");
 		if (line1)
-		  { sc->interpretter = str_split 
-		      (str_replace (line1, "~", getenv ("HOME")), 
+		  { sc->interpretter = str_split
+		      (str_replace (line1, "~", getenv ("HOME")),
 		       whitespacechars);
 		    fprintf (stderr, "%s\n", line); // printout accepted line
 		    continue; }}
@@ -525,7 +549,7 @@ struct serviceconf* parse_conf_file (char* filepath)
 	    line += strspn (line, whitespacechars);
 	    line = strsep (&line, "#");
 
-	    // line_eff = str_replace (line, "~~", former_value_of_key); 
+	    // line_eff = str_replace (line, "~~", former_value_of_key);
 	    // move the above to envp_dup_update_or_add
 	    line = str_replace (line, "~", getenv ("HOME"));
 	    if (line && *line) // not empty
@@ -534,7 +558,8 @@ struct serviceconf* parse_conf_file (char* filepath)
 	fclose (file); }
     return sc; }
 
-char** envp_dup_update_or_add (char** envp, struct str_list* extraenvs)
+char**
+envp_dup_update_or_add (char** envp, struct str_list* extraenvs)
   { // find the number of envp key-vals.
     if (extraenvs == NULL)
       { return envp; }
@@ -553,7 +578,7 @@ char** envp_dup_update_or_add (char** envp, struct str_list* extraenvs)
 	 cur1 ++, cur2 ++)
       { for (cur3 = extraenvs; cur3; cur3 = cur3->next)
 	  { if (((curstr = cur3->str) != NULL) &&
-		(str_beginswith (*cur1, 
+		(str_beginswith (*cur1,
 				 strndup (curstr, strcspn (curstr, "=") + 1))
 		 != NULL))
 	      { *cur2 = curstr;
@@ -584,7 +609,8 @@ argv_dup_add (char** oldargv, struct str_list* prefixargv)
       { newargv [count] = cur->str; }
     return newargv; }
 
-int makeancesdirs (char* path)
+int
+makeancesdirs (char* path)
   { if (*path)
       { char *p, *q, *path_dup = strndup (path, PATH_MAX);
 	for (p = path_dup + 1, q = strchr (p, '/');
@@ -598,8 +624,9 @@ int makeancesdirs (char* path)
 	free (path_dup);
 	return 0; } // success
     { return -1; }} // path was empty failed.
-    
-void sigaction_inst (int signum, void (*handler)(int))
+
+void
+sigaction_inst (int signum, void (*handler)(int))
   { struct sigaction new_action, old_action;
 
     new_action.sa_handler = handler;
