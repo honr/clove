@@ -4,7 +4,7 @@
 #include <syslog.h>
 #include <unistd.h>
 
-/* TODO: clean up broker_message_length and other hard coded string
+/* TODO: clean up BROKER_MESSAGE_LENGTH and other hard coded string
    lengthes.
 
    TODO: daemon mode should actually fork and become daemon. use
@@ -81,12 +81,14 @@ int main (int argc, char* argv[], char** envp)
   if ((! force_wipe_sockpaths) &&
       (broker.sock = sock_addr_connect (SOCK_STREAM, broker.sockpath))
       != -1)
-    { char buf[broker_message_length];
+    { char buf[BROKER_MESSAGE_LENGTH];
       buf[0] = 0; // means remote command, not a service.
       strcpy (buf + 1, "ping");
-      write (broker.sock, buf, strlen (buf + 1) + 2); // TODO: check return val.
-      if (read (broker.sock, buf, broker_message_length - 1) > 0)
-	{ buf[broker_message_length - 1] = 0;
+      if (write (broker.sock, buf, strlen (buf + 1) + 2) < 0)
+	{ perror ("(write) Could not talk to the broker");
+	  exit (1); }
+      if (read (broker.sock, buf, BROKER_MESSAGE_LENGTH - 1) > 0)
+	{ buf[BROKER_MESSAGE_LENGTH - 1] = 0;
 	  printf ("a broker exists with pid: %s\n", buf);
 	  close (broker.sock);
 	  exit (0); }
@@ -172,8 +174,10 @@ int main (int argc, char* argv[], char** envp)
 	{ close (broker.sock);
 	  close (0);
 
-	  char buf[broker_message_length];
-	  read (sock_a, buf, broker_message_length); // TODO: check return val.
+	  char buf[BROKER_MESSAGE_LENGTH];
+	  if (read (sock_a, buf, BROKER_MESSAGE_LENGTH) < 0)
+	    { perror ("(read) Could not read from the client");
+	      exit (1); }
 	  if (buf[0] == 0) // remote command
 	    { char* remote_command = strndup (buf + 1, 222); // TODO: fix hardcoded size
 	      if      (strcmp (remote_command, "quit") == 0)
@@ -184,7 +188,9 @@ int main (int argc, char* argv[], char** envp)
 	      else if (strcmp (remote_command, "ping") == 0)
 		{ char* reply = malloc (128); // TODO: fix hardcoded size
 		  sprintf (reply, "%d", main_process_pid);
-		  write (sock_a, reply, strlen (reply)); }} // TODO: check return val.
+		  if (write (sock_a, reply, strlen (reply)) < 0)
+		    { perror ("(write) Did not receive a reply from the client");
+		      exit (1); }}}
 	  else // service
 	    { char* service_name = strndup (buf, 222); // TODO: fix hardcoded size
 
@@ -201,7 +207,9 @@ int main (int argc, char* argv[], char** envp)
 	      if (access (srv.sockpath, F_OK) != 0)
 		{ service_call (srv, default_envp); }
 
-	      write (sock_a, srv.sockpath, strlen (srv.sockpath)); } // TODO: check return val.
+	      if (write (sock_a, srv.sockpath, strlen (srv.sockpath)) < 0)
+		{ perror ("(write) Could not talk to the service");
+		  exit (1); }} // TODO: check return val.
 	  close (sock_a);
 	  exit (0); }
       int status;

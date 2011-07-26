@@ -59,13 +59,6 @@
 (defn- fd-get-num [#^java.io.FileDescriptor fd]
   (.getInt FileDescriptor-fd-field fd))
 
-(defn- obtain-remote-fds [sock]
-  (when-let [remote-fds-ba (CloveNet/unix_recv_fds sock)]
-    (let [[fd-in fd-out fd-err] (seq remote-fds-ba)]
-     {:in  fd-in
-      :out fd-out
-      :err fd-err})))
-
 (defn- read-ab-string-vector [#^java.nio.ByteBuffer bb]
   ;; TODO: watch out for unicode!
     (let [bb-dup (.duplicate bb)]
@@ -82,27 +75,24 @@
 				(.get bb-dup)
 				(.substring (String. #^bytes ba) 1)))))))))))
 
-(defn- obtain-remote-context [sock]
-  (if-let [data (CloveNet/read sock message-length)]
-    (let [data (java.nio.ByteBuffer/wrap data)]
-      [(read-ab-string-vector data)
-       (into {} (map (fn [#^String s]
-		       (vec (take 2 (conj (vec (.split s "=" 2)) nil))))
-		     (read-ab-string-vector data)))])))
-
 ;; TODO: terminate thread when certain errors occur.
 (defn- process-thread [sock]
   (try
-    (if-let [fds (obtain-remote-fds sock)]
-      (let [[args env] (obtain-remote-context sock)]
-
+    (if-let [remote-message (CloveNet/unix_recvmsgf sock 3 0)]
+      (let [fds (zipmap [:out :err :in] (seq (.fds remote-message)))
+            data (java.nio.ByteBuffer/wrap (.buf remote-message))
+            args (read-ab-string-vector data)
+            env (into {}
+                      (map (fn [#^String s]
+                             (vec (take 2 (conj (vec (.split s "=" 2)) nil))))
+                           (read-ab-string-vector data)))]
 	(cond (= (first args) "-q") (terminate 0)
 	      (= (first args) "--ping") (println "Yes darling; What is it?")
 	      :else
 	      (do
 		(.println *err* (apply format "[%d %d %d] open"
 				       (map fd-get-num (vals fds))))
-	      
+
 		(binding [clojure.core/*env* env
 			  clojure.core/*cwd* (get env "PWD")
 			  clojure.core/*home* (get env "HOME")
@@ -125,12 +115,12 @@
 						  (java.io.File. clojure.core/*cwd* first-arg))
 			       (rest args))
 			(apply clojure.main/main args)))
-		       ;; (catch java.io.IOException e nil)
-		       (catch CloveExitException e nil)
-		       (catch clojure.lang.Compiler$CompilerException e
-			 (.printStackTrace e *err*))
-		       (catch Exception e
-			 (.printStackTrace e *err*))))
+                    ;; (catch java.io.IOException e nil)
+                    (catch CloveExitException e nil)
+                    (catch clojure.lang.Compiler$CompilerException e
+                      (.printStackTrace e *err*))
+                    (catch Exception e
+                      (.printStackTrace e *err*))))
 
 		(.println *err* (apply format "[%d %d %d] close"
 				       (map fd-get-num (vals fds))))))
@@ -143,7 +133,7 @@
 	;; (issue (System/gc) on the second time you open a connection)
 	;; it the live FDs will get garbage collected. There should be a
 	;; way to mark new FDs as open.
-      
+
 	;; (libc/fsync (:num (fds :out)))
 	;; (libc/close (:num (fds :out)))
 	;; (libc/fsync (:num (fds :err)))
@@ -163,13 +153,13 @@
 
 (defn- main []
   (initialize)
-  
+
   ;; main loop
   (while (and @sock (pos? @sock))
     (let [sock-a (CloveNet/accept @sock)]
       (when (pos? sock-a)
 	(.start (new Thread (fn [] (process-thread sock-a)))))))
-  
+
   (terminate 0))
 
 (main)

@@ -1,26 +1,5 @@
+#include "clove-common.h"
 #include "clove-utils.h"
-
-// for OSX
-#ifndef _GNU_SOURCE
-
-size_t
-strnlen(const char *s, size_t len)
-  { size_t i;
-    for (i=0; i < len && *s; i++, s++);
-    return i; }
-
-char*
-strndup (char const *s, size_t n)
-  { size_t len = strnlen (s, n); // or n-1 ?
-    char *t;
-
-    if ((t = malloc (len + 1)) == NULL)
-      return NULL;
-
-    t[len] = '\0';
-    return memcpy (t, s, len); }
-
-#endif
 
 inline char*
 strlcpy_p (char* dest, const char* src, const char* dest_limit)
@@ -268,153 +247,6 @@ expand_file_name (char* filename)
   { return str_replace (filename, "~", getenv ("HOME")); }
 // sprintf (path, "%s/.local", getenv ("HOME"));
 
-struct sockaddr_gen
-addr_unix (int type, const char* sockpath)
-  { struct sockaddr_gen a;
-    struct sockaddr_un* addr = (struct sockaddr_un*) malloc (sizeof (struct sockaddr_un));
-    // printf ("path: %s\n", sockpath);
-    addr->sun_family = AF_UNIX;
-
-    strcpy (addr->sun_path, sockpath);
-    if (sockpath[0] == '@') // we assume an abstract path was intended
-      { addr->sun_path[0] = 0;
-	/* We consider the null byte at the end of sockpath NOT part
-	   of the name */
-	a.len = strlen (sockpath) + sizeof (addr->sun_family); }
-    else
-      { a.len = strlen (sockpath) + 1 + sizeof (addr->sun_family); }
-
-    a.addr = (struct sockaddr *) addr;
-    a.domain = AF_UNIX;
-    a.type = type;
-    a.protocol = 0;
-    return a; }
-
-int
-sock_bind (struct sockaddr_gen a, int force_bind)
-  { int sock;
-
-    if ((sock = socket (a.domain, a.type, a.protocol)) < 0)
-      { perror ("socket");
-        exit(2); }
-
-    if (bind (sock, a.addr, a.len) != 0)
-      { if (force_bind)
-	  { perror ("bind");
-	    exit (2); }
-	else
-	  { // perror ("bind");
-	    exit (0); }}
-
-    if (a.type & SOCK_STREAM)
-      { if (listen (sock, LISTEN_BACKLOG) != 0)
-	  { perror ("listen");
-	    exit(2); }}
-
-    return sock; }
-
-int sock_connect (struct sockaddr_gen a)
-  { int sock;
-
-    if ((sock = socket (a.domain, a.type, a.protocol)) < 0)
-      { perror ("socket");
-        // exit(2);
-	return sock; }
-
-    if (a.type & SOCK_STREAM)
-      { if (connect (sock, a.addr, a.len) != 0)
-	  { // perror ("connect");
-	    // TODO: throw exception
-	    close (sock);
-	    return -1;
-	    // exit(2);
-	  }}
-
-    return sock; }
-
-int
-sock_addr_bind (int type, char* sockpath, int force_bind)
-  { struct sockaddr_gen a = addr_unix (type, sockpath);
-    return sock_bind (a, force_bind); }
-
-int
-sock_addr_connect (int type, char* sockpath)
-  { struct sockaddr_gen a = addr_unix (type, sockpath);
-    return sock_connect (a); }
-
-/* TODO: pass credentials. the receiving end should simply abort
-         communications if the client's uid is not the same as the
-         service's. */
-
-int
-unix_send_fds (int sock, struct remote_fds iofds)
-  { char cmsg_buf[CMSG_SPACE(sizeof(iofds))];
-    char *m = "message";
-    struct iovec iov = { m, strlen(m) };
-
-    struct msghdr msgh =
-      { .msg_name       = NULL,
-        .msg_namelen    = 0,
-        .msg_iov        = &iov,
-        .msg_iovlen     = 1,
-        .msg_control    = &cmsg_buf,
-        .msg_controllen = sizeof (cmsg_buf), // CMSG_LEN(sizeof(iofds));
-        .msg_flags      = 0 };
-
-    struct cmsghdr *cmsg;
-    cmsg = CMSG_FIRSTHDR(&msgh);
-    cmsg->cmsg_level = SOL_SOCKET;
-    cmsg->cmsg_type  = SCM_RIGHTS;
-    cmsg->cmsg_len   = CMSG_LEN(sizeof(iofds));
-
-    memcpy(CMSG_DATA(cmsg), &iofds, sizeof(iofds));
-    msgh.msg_controllen = cmsg->cmsg_len;
-    return sendmsg(sock, &msgh, 0); } // MSG_NOSIGNAL
-
-int
-unix_recv_fds(int sock, struct remote_fds* iofds_p)
-  { // TODO: check buffer sizes (cmsg_buf_size, msg, iofds);
-    struct iovec iov;
-    int cmsg_buf_size = 128; // CMSG_SPACE(sizeof(iofds)) // TODO: fix hardcoded size
-    char cmsg_buf[cmsg_buf_size];
-
-    char msg[128]; // TODO: fix hardcoded size
-    iov.iov_base = msg;
-    iov.iov_len  = 7;  // "message" // TODO: fix hardcoded size
-
-    struct msghdr msgh =
-      { .msg_name       = NULL,
-        .msg_namelen    = 0,
-        .msg_iov        = &iov,
-        .msg_iovlen     = 1,
-        .msg_control    = cmsg_buf,
-        .msg_controllen = sizeof (cmsg_buf),
-	.msg_flags      = 0 };
-
-    int ret = 0;
-    int ret0;
-    if ((ret0 = recvmsg (sock, &msgh, 0)) > 0)
-      { struct cmsghdr* cmsg = NULL;
-	// *iofds_p = NULL;
-        for (cmsg  = CMSG_FIRSTHDR(&msgh);
-             cmsg != NULL;
-             cmsg  = CMSG_NXTHDR(&msgh, cmsg))
-          { if ((SOL_SOCKET == cmsg->cmsg_level) &&
-                (SCM_RIGHTS == cmsg->cmsg_type))
-              { // *iofds_p = (struct remote_fds*) malloc (sizeof (struct remote_fds));
-		memcpy (iofds_p, CMSG_DATA(cmsg), sizeof (struct remote_fds));
-		ret = ret0;
-                // TODO: study: (cmsg->cmsg_len) > sizeof (struct remote_fds)
-                break; }}
-
-        if (cmsg == NULL)
-          { fprintf (stderr, "control header is NULL\n"); }}
-    else
-      { fprintf (stderr, "errno: %d\n", errno);
-        perror ("recvmsg"); }
-
-    return ret; }
-
 struct service
 service_init (char* service_name)
   { struct service s;
@@ -478,7 +310,9 @@ service_call (struct service srv, char** default_envp)
     printf ("waiting for %s ...\n", srv.name);
     // TODO: have a time out
     char* buf = malloc (128); // TODO: fix hardcoded size
-    read (pipefd[0], buf, 127); // TODO: fix hardcoded size. check return val.
+    if (read (pipefd[0], buf, 127) < 0) // TODO: fix hardcoded size.
+      { perror ("(read) could not communicate with the service");
+        exit (1); }
     buf[127]=0; // TODO: fix hardcoded size
     printf ("%s says: %s", srv.name, buf);
     close (pipefd[0]);

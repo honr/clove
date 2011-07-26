@@ -14,19 +14,22 @@ TARGETs += $(BUILDDIR)/clove.jar
 
 all: $(TARGETs)
 
-$(DOBJ)/clove-utils.o: $(SRC)/clove-utils.c $(SRC)/clove-utils.h
-	gcc $(CFLAGS) -c -o $@ $<
+$(DOBJ)/clove-common.o: $(SRC)/clove-common.c $(SRC)/clove-common.h
+	gcc $(CFLAGS) -fPIC -c -o $@ $<
 
-$(DOBJ)/clove-daemon.o: $(SRC)/clove-daemon.c $(SRC)/clove-utils.h
-	gcc $(CFLAGS) -c -o $@ $<
+$(DOBJ)/clove-utils.o: $(SRC)/clove-utils.c $(SRC)/clove-utils.h $(SRC)/clove-common.h
+	gcc $(CFLAGS) -fPIC -c -o $@ $<
 
-$(DBIN)/clove-daemon: $(DOBJ)/clove-daemon.o $(DOBJ)/clove-utils.o
+$(DOBJ)/clove-daemon.o: $(SRC)/clove-daemon.c $(SRC)/clove-utils.h $(SRC)/clove-common.h
+	gcc $(CFLAGS) -fPIC -c -o $@ $<
+
+$(DBIN)/clove-daemon: $(DOBJ)/clove-daemon.o $(DOBJ)/clove-utils.o $(DOBJ)/clove-common.o
 	gcc $(CFLAGS) $^ -o $@
 
-$(DOBJ)/clove.o: $(SRC)/clove.c $(SRC)/clove-utils.h
-	gcc $(CFLAGS) -c -o $@ $<
+$(DOBJ)/clove.o: $(SRC)/clove.c $(SRC)/clove-utils.h $(SRC)/clove-common.h
+	gcc $(CFLAGS) -fPIC -c -o $@ $<
 
-$(DBIN)/clove: $(DOBJ)/clove.o $(DOBJ)/clove-utils.o
+$(DBIN)/clove: $(DOBJ)/clove.o $(DOBJ)/clove-utils.o $(DOBJ)/clove-common.o
 	gcc $(CFLAGS) $^ -lreadline -o $@ # -lhistory -ltermcap
 
 $(BUILDDIR)/include/clove_CloveNet.h: $(SRC)/*.java
@@ -34,9 +37,9 @@ $(BUILDDIR)/include/clove_CloveNet.h: $(SRC)/*.java
 # TODO: ^^ find the option to includeJavaRuntime
 	javah -d $(BUILDDIR)/include -classpath build clove.CloveNet
 
-$(DLIB)/libCloveNet.$(LIBEXT): $(BUILDDIR)/include/clove_CloveNet.h
+$(DLIB)/libCloveNet.$(LIBEXT): $(BUILDDIR)/include/clove_CloveNet.h $(DOBJ)/clove-common.o
 	gcc -Wall -fPIC -c $(INCLUDESJAVA) $(SRC)/CloveNet.c -o $(DOBJ)/CloveNet.o
-	gcc -o $(DLIB)/libCloveNet.$(LIBEXT) $(LIBSWITCH) $(DOBJ)/CloveNet.o
+	gcc -o $(DLIB)/libCloveNet.$(LIBEXT) $(LIBSWITCH) $(DOBJ)/CloveNet.o $(DOBJ)/clove-common.o
 
 build/clove.jar: $(BUILDDIR)/include/clove_CloveNet.h
 	cd build ; jar cf clove.jar clove/*.class

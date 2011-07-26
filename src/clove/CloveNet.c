@@ -1,199 +1,5 @@
 #include "clove_CloveNet.h"
-
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netdb.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <errno.h>
-// #include <error.h>
-#include <sys/un.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <sys/time.h>
-#include <sys/uio.h>
-#include <sys/file.h>
-#include <fcntl.h>
-
-struct remote_fds {
-  int in;
-  int out;
-  int err;
-};
-
-#define LISTEN_BACKLOG 64
-
-struct sockaddr_gen {
-  int domain;
-  int type;
-  int protocol;
-  struct sockaddr* addr;
-  socklen_t len;
-};
-
-// for OSX
-#ifndef _GNU_SOURCE
-
-size_t strnlen(const char *s, size_t len)
-  { size_t i;
-    for (i=0; i < len && *s; i++, s++);
-    return i; }
-
-char* strndup (char const *s, size_t n)
-  { size_t len = strnlen (s, n); // or n-1 ?
-    char *t;
-
-    if ((t = malloc (len + 1)) == NULL)
-      return NULL;
-
-    t[len] = '\0';
-    return memcpy (t, s, len); }
-
-#endif
-
-struct sockaddr_gen addr_unix (int type, const char* sockpath)
-  { struct sockaddr_gen a;
-    struct sockaddr_un* addr = (struct sockaddr_un*) malloc (sizeof (struct sockaddr_un));
-    // printf ("path: %s\n", sockpath);
-    addr->sun_family = AF_UNIX;
-
-    strcpy (addr->sun_path, sockpath);
-    if (sockpath[0] == '@') // we assume an abstract path was intended
-      { addr->sun_path[0] = 0;
-	/* We consider the null byte at the end of sockpath NOT part
-	   of the name */
-	a.len = strlen (sockpath) + sizeof (addr->sun_family); }
-    else
-      { a.len = strlen (sockpath) + 1 + sizeof (addr->sun_family); }
-
-    a.addr = (struct sockaddr *) addr;
-    a.domain = AF_UNIX;
-    a.type = type;
-    a.protocol = 0;
-    return a; }
-
-int sock_bind (struct sockaddr_gen a, int force_bind)
-  { int sock;
-
-    if ((sock = socket (a.domain, a.type, a.protocol)) < 0)
-      { perror ("socket");
-        exit(2); }
-
-    if (bind (sock, a.addr, a.len) != 0)
-      { if (force_bind)
-	  { perror ("bind");
-	    exit (2); }
-	else
-	  { // perror ("bind");
-	    exit (0); }}
-
-    if (a.type & SOCK_STREAM)
-      { if (listen (sock, LISTEN_BACKLOG) != 0)
-	  { perror ("listen");
-	    exit(2); }}
-
-    return sock; }
-
-int sock_connect (struct sockaddr_gen a)
-  { int sock;
-
-    if ((sock = socket (a.domain, a.type, a.protocol)) < 0)
-      { perror ("socket");
-        // exit(2);
-	return sock; }
-
-    if (a.type & SOCK_STREAM)
-      { if (connect (sock, a.addr, a.len) != 0)
-	  { // perror ("connect");
-	    // TODO: throw exception
-	    close (sock);
-	    return -1;
-	    // exit(2);
-	  }}
-
-    return sock; }
-
-int sock_addr_bind (int type, char* sockpath, int force_bind)
-  { struct sockaddr_gen a = addr_unix (type, sockpath);
-    return sock_bind (a, force_bind); }
-
-int sock_addr_connect (int type, char* sockpath)
-  { struct sockaddr_gen a = addr_unix (type, sockpath);
-    return sock_connect (a); }
-
-int unix_send_fds (int sock, struct remote_fds iofds)
-  { char cmsg_buf[CMSG_SPACE(sizeof(iofds))];
-    char *m = "message";
-    struct iovec iov = { m, strlen(m) };
-
-    struct msghdr msgh =
-      { .msg_name       = NULL,
-        .msg_namelen    = 0,
-        .msg_iov        = &iov,
-        .msg_iovlen     = 1,
-        .msg_control    = &cmsg_buf,
-        .msg_controllen = sizeof (cmsg_buf), // CMSG_LEN(sizeof(iofds));
-        .msg_flags      = 0 };
-
-    struct cmsghdr *cmsg;
-    cmsg = CMSG_FIRSTHDR(&msgh);
-    cmsg->cmsg_level = SOL_SOCKET;
-    cmsg->cmsg_type  = SCM_RIGHTS;
-    cmsg->cmsg_len   = CMSG_LEN(sizeof(iofds));
-
-    memcpy(CMSG_DATA(cmsg), &iofds, sizeof(iofds));
-    msgh.msg_controllen = cmsg->cmsg_len;
-    return sendmsg(sock, &msgh, 0); } // MSG_NOSIGNAL
-
-int unix_recv_fds(int sock, struct remote_fds* iofds_p)
-  { // TODO: check buffer sizes (cmsg_buf_size, msg, iofds);
-    struct iovec iov;
-    int cmsg_buf_size = 128; // CMSG_SPACE(sizeof(iofds)) // TODO: fix hardcoded size
-    char cmsg_buf[cmsg_buf_size];
-
-    char msg[128]; // TODO: fix hardcoded size
-    iov.iov_base = msg;
-    iov.iov_len  = 7;  // "message" // TODO: fix hardcoded size
-
-    struct msghdr msgh =
-      { .msg_name       = NULL,
-        .msg_namelen    = 0,
-        .msg_iov        = &iov,
-        .msg_iovlen     = 1,
-        .msg_control    = cmsg_buf,
-        .msg_controllen = sizeof (cmsg_buf),
-	.msg_flags      = 0 };
-
-    int ret = 0;
-    int ret0;
-    if ((ret0 = recvmsg (sock, &msgh, 0)) > 0)
-      { struct cmsghdr* cmsg = NULL;
-	// *iofds_p = NULL;
-        for (cmsg  = CMSG_FIRSTHDR(&msgh);
-             cmsg != NULL;
-             cmsg  = CMSG_NXTHDR(&msgh, cmsg))
-          { if ((SOL_SOCKET == cmsg->cmsg_level) &&
-                (SCM_RIGHTS == cmsg->cmsg_type))
-              { // *iofds_p = (struct remote_fds*) malloc (sizeof (struct remote_fds));
-		memcpy (iofds_p, CMSG_DATA(cmsg), sizeof (struct remote_fds));
-		ret = ret0;
-                // TODO: study: (cmsg->cmsg_len) > sizeof (struct remote_fds)
-                break; }}
-
-        if (cmsg == NULL)
-          { fprintf (stderr, "control header is NULL\n"); }}
-    /* else
-       { fprintf (stderr, "errno: %d\n", errno);
-         perror ("recvmsg"); } */
-
-    return ret; }
-
-
-
-////////////////////////////////////////////////////////////
+#include "clove-common.h"
 
 /*
  * Class:     CloveNet
@@ -243,44 +49,75 @@ JNIEXPORT jint JNICALL Java_clove_CloveNet_fsync
 
 /*
  * Class:     clove_CloveNet
- * Method:    unix_recv_fds
- * Signature: (I)[Ljava/io/FileDescriptor;
+ * Method:    unix_recvmsgf
+ * Signature: (II)Lclove/CloveNet/Message;
  */
-JNIEXPORT jobjectArray JNICALL Java_clove_CloveNet_unix_1recv_1fds
-(JNIEnv *env, jclass cls, jint sock)
-//unix_recv_fds (int sock, struct remote_fds* iofds_p);
-  { struct remote_fds fds;
-    int len;
-    if ((len = unix_recv_fds (sock, &fds)) <= 0)
-      { // perror ("unix_recv_fds");
-	// what to do here? returning NULL is probably enough.
-	return NULL; }
-    else
-      { jfieldID field_fd;
-	jmethodID const_fdesc;
-	jclass class_fdesc;
+JNIEXPORT jobject JNICALL Java_clove_CloveNet_unix_1recvmsgf
+(JNIEnv *env, jclass cls, jint sock, jint num_fds, jint flags)
+{ int fds [num_fds];
+  int buf_len = BROKER_MESSAGE_LENGTH; // max message size
 
-	if ((class_fdesc = (*env)->FindClass 
-	     (env, "java/io/FileDescriptor")) == NULL)
-	  { return NULL; }
+  jclass clove_CloveNet_Message_CLASS;
+  jfieldID clove_CloveNet_Message_fds_FIELD;
+  jfieldID clove_CloveNet_Message_buf_FIELD;
+  jfieldID clove_CloveNet_Message_retval_FIELD;
+  jmethodID clove_CloveNet_Message_init_METHOD;
+  jclass java_io_FileDescriptor_CLASS;
+  jfieldID java_io_FileDescriptor_fd_FIELD;
+  jmethodID java_io_FileDescriptor_init_METHOD;
 
-	if ((field_fd = (*env)->GetFieldID 
-	     (env, class_fdesc, "fd", "I")) == NULL) 
-	  { return NULL; }
+  if (! ((clove_CloveNet_Message_CLASS = (*env)->FindClass
+	  (env, "clove/CloveNet$Message")) &&
+	 (clove_CloveNet_Message_fds_FIELD = (*env)->GetFieldID
+	  (env, clove_CloveNet_Message_CLASS, "fds", "[Ljava/io/FileDescriptor;")) &&
+	 (clove_CloveNet_Message_buf_FIELD = (*env)->GetFieldID
+	  (env, clove_CloveNet_Message_CLASS, "buf", "[B")) &&
+	 (clove_CloveNet_Message_retval_FIELD = (*env)->GetFieldID
+	  (env, clove_CloveNet_Message_CLASS, "retval", "I")) &&
+	 (clove_CloveNet_Message_init_METHOD = (*env)->GetMethodID
+	  (env, clove_CloveNet_Message_CLASS, "<init>", "()V")) &&
+	     
+	 (java_io_FileDescriptor_CLASS = (*env)->FindClass
+	  (env, "java/io/FileDescriptor")) &&
+	 (java_io_FileDescriptor_fd_FIELD = (*env)->GetFieldID
+	  (env, java_io_FileDescriptor_CLASS, "fd", "I")) &&
+	 (java_io_FileDescriptor_init_METHOD = (*env)->GetMethodID
+	  (env, java_io_FileDescriptor_CLASS, "<init>", "()V"))))
+    { return NULL; }
 
-	if ((const_fdesc = (*env)->GetMethodID 
-	     (env, class_fdesc, "<init>", "()V")) == NULL)
-	  { return NULL; }
-	
-	jobjectArray ret = (*env)->NewObjectArray (env, 3, class_fdesc, NULL);
-	int i;
-	for (i = 0; i < 3; i ++)
-	  { // construct a new FileDescriptor
-	    jobject ret0 = (*env)->NewObject (env, class_fdesc, const_fdesc);
-	    // poke the "fd" field with the file descriptor
-	    (*env)->SetIntField(env, ret0, field_fd, ((int *) &fds)[i]);
-	    (*env)->SetObjectArrayElement (env, ret, i, ret0); }
-	return ret; }}
+  jobject obj = (*env)->NewObject (env, clove_CloveNet_Message_CLASS, clove_CloveNet_Message_init_METHOD);
+  jobjectArray fds_obj = (*env)->NewObjectArray (env, num_fds, java_io_FileDescriptor_CLASS, NULL);
+  jbyteArray buf_obj = (*env)->NewByteArray (env, buf_len);
+  (*env)->SetObjectField (env, obj, clove_CloveNet_Message_fds_FIELD, fds_obj);
+  (*env)->SetObjectField (env, obj, clove_CloveNet_Message_buf_FIELD, buf_obj);
+  jbyte* buf = (*env)->GetByteArrayElements (env, buf_obj, NULL);
+  int len = unix_recvmsgf (sock, buf, buf_len, fds, &num_fds, flags);
+  (*env)->ReleaseByteArrayElements(env, buf_obj, buf, 0);
+  if (len <= 0)
+    { // perror ("unix_recvmsgf");
+      // what to do here? returning NULL is probably enough.
+      return NULL; }
+  else
+    { (*env)->SetIntField (env, obj, clove_CloveNet_Message_retval_FIELD, len);
+
+      int i;
+      for (i = 0; i < num_fds; i ++)
+	{ // construct a new FileDescriptor
+	  jobject fd_obj = (*env)->NewObject (env, java_io_FileDescriptor_CLASS, java_io_FileDescriptor_init_METHOD);
+	  // poke the "fd" field with the file descriptor
+	  (*env)->SetIntField (env, fd_obj, java_io_FileDescriptor_fd_FIELD, fds[i]);
+	  (*env)->SetObjectArrayElement (env, fds_obj, i, fd_obj); }
+
+      return obj; }}
+
+/* /\* */
+/*  * Class:     clove_CloveNet */
+/*  * Method:    unix_sendmsgf */
+/*  * Signature: (ILclove/CloveNet/Message;I)[Ljava/io/FileDescriptor; */
+/*  *\/ */
+/* JNIEXPORT jobjectArray JNICALL Java_clove_CloveNet_unix_1sendmsgf */
+/*   (JNIEnv *, jclass, jint, jobject, jint); */
+
 
 /*
  * Class:     CloveNet

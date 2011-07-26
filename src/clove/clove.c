@@ -7,7 +7,7 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 
-/* TODO: clean up broker_message_length and other hard coded string
+/* TODO: clean up BROKER_MESSAGE_LENGTH and other hard coded string
    lengthes.
 
    TODO: daemon mode should actually fork and become daemon. use
@@ -138,17 +138,19 @@ int main (int argc, char* argv[], char** envp)
           break;
 
         case 'r':
-          { char buf[broker_message_length];
+          { char buf[BROKER_MESSAGE_LENGTH];
             struct str_list* cur;
             for (cur = remote_args;
                  cur;
                  cur = cur->next)
-              { memccpy (buf + 1, cur->str, 0, broker_message_length - 2);
+              { memccpy (buf + 1, cur->str, 0, BROKER_MESSAGE_LENGTH - 2);
                 buf[0] = 0; // means remote command, not a service.
                 broker.sock = sock_addr_connect (SOCK_STREAM, broker.sockpath);
-                write (broker.sock, buf, strlen (cur->str) + 2); // TODO: check return val.
-                if (read (broker.sock, buf, broker_message_length - 1) > 0)
-                  { buf[broker_message_length - 1] = 0;
+                if (write (broker.sock, buf, strlen (cur->str) + 2) < 0)
+		  { perror ("Could not talk to the broker\n");
+		    exit (1); }
+                if (read (broker.sock, buf, BROKER_MESSAGE_LENGTH - 1) > 0)
+                  { buf[BROKER_MESSAGE_LENGTH - 1] = 0;
                     printf ("%s\n", buf); }
                 close (broker.sock); }}
           break;
@@ -156,20 +158,20 @@ int main (int argc, char* argv[], char** envp)
         case 'c':
           { broker.sock = sock_addr_connect (SOCK_STREAM, broker.sockpath);
 
-            char buf[broker_message_length];
+            char buf[BROKER_MESSAGE_LENGTH];
             struct service srv;
 
             { int ret;
               int message_length;
               char* remote_service = str_list_pop (&remote_args);
 
-              buf[broker_message_length - 1] = 0;
+              buf[BROKER_MESSAGE_LENGTH - 1] = 0;
               strcpy (buf, remote_service);
               message_length = strlen (buf) + 1;
               srv = service_init (remote_service);
 
               ret = write (broker.sock, buf, message_length);
-              ret = read (broker.sock, buf, broker_message_length);
+              ret = read (broker.sock, buf, BROKER_MESSAGE_LENGTH);
               if (ret <= 0)
                 { fprintf (stderr, "Read: %d bytes. Probably OK. Terminating.\n",
                            ret);
@@ -182,16 +184,8 @@ int main (int argc, char* argv[], char** envp)
             srv.sockpath[127] = 0; // TODO: fix hardcoded size
             srv.sock = sock_addr_connect (SOCK_STREAM, srv.sockpath);
 
-            struct remote_fds iofds =
-              { .in     = 0,
-                .out    = 1,
-                .err    = 2 };
-
-            if (unix_send_fds (srv.sock, iofds) < 0)
-              { perror ("unix_send_fds"); }
-
             char* buf_cur = buf;
-            char* buf_lim = buf + broker_message_length;
+            char* buf_lim = buf + BROKER_MESSAGE_LENGTH;
             str_list_to_pack (&buf_cur, buf_lim, remote_args);
 
             { int envs_size = 0;
@@ -205,13 +199,19 @@ int main (int argc, char* argv[], char** envp)
                 { printf ("environment too long (%d bytes)\n", envs_size);
                   exit (3); }}
 
+	    int iofds [] = {1, 2, 0};
+            if (unix_sendmsgf (srv.sock, buf, buf_cur - buf, iofds, 3, 0) < 0)
+              { perror ("unix_sendmsgf"); }
+	    
             // printf ("buf_cur - buf %ld\n", buf_cur - buf);
-            write (srv.sock, buf, buf_cur - buf); // TODO: check return val.
+            /* if (write (srv.sock, buf, buf_cur - buf) < 0) */
+	    /*   { perror ("(write) Could not talk to the service"); } */
 
             // TODO: also, communicate with the server out-of-band, for
             //       instance, ask for completion.
 
-            read (srv.sock, buf, broker_message_length); // TODO: check return val.
+            if (read (srv.sock, buf, BROKER_MESSAGE_LENGTH) < 0)
+	      { perror ("(read) Could not talk to the service"); }
 	  }
           break;
 
