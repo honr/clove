@@ -1,4 +1,5 @@
-CFLAGS=-Wall -O3
+# CFLAGS=-Wall -O3
+CFLAGS=-g -Wall -O3
 # CFLAGS=-g -Wall -pg -O3
 
 default: all

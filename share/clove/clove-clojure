@@ -4,8 +4,10 @@
 ;; body of this script is not being executed in BSD.
 
 (ns clove.clojure
-  (:require [clojure.main])
-  (:import [clove CloveSecurityManager CloveExitException CloveNet]))
+  (:require [clojure.main]
+            [clojure.repl])
+  (:import [clove CloveSecurityManager CloveExitException CloveNet]
+           [java.util TreeSet]))
 
 (in-ns 'clojure.core)
 (def ^:dynamic *env* nil)
@@ -61,60 +63,192 @@
 
 (defn- read-ab-string-vector [#^java.nio.ByteBuffer bb]
   ;; TODO: watch out for unicode!
-    (let [bb-dup (.duplicate bb)]
-     (loop [v []]
-       (if (not (.hasRemaining bb))
-	 v
-	 (do
-	   (while (not (= (.get bb) 0)))
-	   (let [len (- (.position bb) (.position bb-dup) 1)]
-	     (if (zero? len)
-	       v
-	       (recur (conj v (let [ba (make-array Byte/TYPE len)]
-				(.get bb-dup ba 0 len)
-				(.get bb-dup)
-				(.substring (String. #^bytes ba) 1)))))))))))
+  (let [bb-dup (.duplicate bb)]
+    (loop [v []]
+      (if (not (.hasRemaining bb))
+        v
+        (do
+          (while (not (= (.get bb) 0)))
+          (let [len (- (.position bb) (.position bb-dup) 1)]
+            (if (zero? len)
+              v
+              (recur (conj v (let [ba (make-array Byte/TYPE len)]
+                               (.get bb-dup ba 0 len)
+                               (.get bb-dup)
+                               (.substring (String. #^bytes ba) 1)))))))))))
+
+;; ------------------------------ COMPLETION ------------------------------
+
+(def ^{:doc
+       "This file consists of all classes in the classpath, one class on each line."}
+  classes-index-file (str (System/getProperty "user.home")
+                          "/.local/share/java/classes.index"))
+
+;; TODO: build trie instead of a red-black-tree
+(def static-names (ref
+                   (doto (TreeSet. )
+                     (.addAll (concat
+                               (map str (keys (ns-publics 'clojure.core)))
+                               (map str (keys (ns-publics 'clojure.repl)))
+                               (when (.exists (java.io.File. classes-index-file))
+                                 (line-seq (java.io.BufferedReader.
+                                            (java.io.InputStreamReader.
+                                             (java.io.FileInputStream.
+                                              classes-index-file))))))))))
+
+(defn- common-prefix [^String s1 ^String s2]
+  (.substring s1 0 (count (take-while identity (map = s1 s2)))))
+
+(defn- str-next [^String s]
+  (let [l-1 (dec (.length s))]
+    (str (.substring s 0 l-1)
+         (char (inc (int (.charAt s l-1)))))))
+
+(defn- comp-component [common-part x]
+  (let [p (.split (.substring x (.length common-part))
+                  "[/\\.\\$]" 2)]
+    (str
+     common-part
+     (first p)
+     (when (second p)
+       (.charAt x (+ (.length common-part)
+                     (.length (first p))))))))
+
+(defn- comp-component? [x]
+  (or (.endsWith x ".")
+      (.endsWith x "/")
+      (.endsWith x "$")))
+
+(defn- completions-potential-treeset-gen [line]
+  (if (neg? (.indexOf line "/"))
+    (doto (.clone @static-names)
+      (.addAll (map (comp str key)
+                    (ns-interns 'user))))
+    (let [[ns-or-class-part mtd-part] (.split line "/" 2)]
+      (or
+       (try ;; let's see if it is a class
+         (doto (TreeSet. String/CASE_INSENSITIVE_ORDER)
+           (.addAll
+            (map #(str ns-or-class-part "/" (.getName %))
+                 (.getMethods (Class/forName ns-or-class-part)))))
+         (catch Exception e nil))
+       (try ;; is it a namespace?
+         (let [their-ns (symbol ns-or-class-part)]
+           (require their-ns)
+           (doto (TreeSet. String/CASE_INSENSITIVE_ORDER)
+             (.addAll (map
+                       #(str ns-or-class-part "/" (key %))
+                       (ns-interns their-ns)))))
+         (catch Exception e nil))))))
+
+(defn- completions-for [line]
+  (let [coll (completions-potential-treeset-gen line)
+        coll (TreeSet.
+              (.tailSet
+               (if (empty? line)
+                 coll
+                 (.headSet coll (str-next line) false))
+               line))]
+    (when-not (empty? coll)
+      (loop [cur (first coll) out []]
+        (if-not cur
+          out
+          (let [coll-rest (.tailSet coll cur)]
+            (if (empty? coll-rest)
+              out
+              (let [x0 (first coll-rest)
+                    x (comp-component line x0)]
+                (recur (if (comp-component? x)
+                         (str-next x)
+                         (.higher coll x0))
+                       (conj out x))))))))))
+
+(defn- compl [line]
+  (let [coll (completions-for line)]
+    (when-let [x0 (first coll)]
+      ;; (.println *err* (str coll))
+      (if (second coll)
+        (let [pfx (common-prefix x0 (last coll))]
+          (if (= x0 pfx) coll (cons pfx coll)))
+        (if (comp-component? x0)
+          (concat [x0] (completions-for x0))
+          [x0])))))
 
 ;; TODO: terminate thread when certain errors occur.
+(defn- process-comp-doc [fd-in fd-out]
+  (let [out (java.io.OutputStreamWriter.
+             (java.io.FileOutputStream.
+              fd-out))
+        cbuf-bb (java.nio.CharBuffer/allocate message-length)
+        cbuf (.array cbuf-bb)
+        in (java.io.InputStreamReader.
+            (java.io.FileInputStream.
+             fd-in))
+        len (atom 0)]
+    (while (pos?
+            (reset! len (.read in cbuf 0 message-length)))
+      (let [line (String/valueOf cbuf 0 @len)]
+        (cond
+          (.startsWith line "complete ")
+          (let [line (.substring line 23)]
+            (.write out (apply str (interpose "\n" (compl line))))
+            (.write out (int 0))
+            (.flush out))
+
+          (.startsWith line "documentation ")
+          (let [line (.substring line 14)] 
+            (.write out (with-out-str (#'clojure.repl/print-doc (meta (resolve (symbol line))))))
+            (.flush out)))))))
+
+;; ------------------------------ MAIN THREAD ------------------------------
+
 (defn- process-thread [sock]
   (try
-    (if-let [remote-message (CloveNet/unix_recvmsgf sock 3 0)]
-      (let [fds (zipmap [:out :err :in] (seq (.fds remote-message)))
+    (if-let [remote-message (CloveNet/unix_recvmsgf sock 5 0)]
+      (let [fds (into {} (map vector [:out :err :in :command-in :command-out]
+                              (filter identity (.fds remote-message))))
             data (java.nio.ByteBuffer/wrap (.buf remote-message))
             args (read-ab-string-vector data)
             env (into {}
                       (map (fn [#^String s]
                              (vec (take 2 (conj (vec (.split s "=" 2)) nil))))
                            (read-ab-string-vector data)))]
-	(cond (= (first args) "-q") (terminate 0)
-	      (= (first args) "--ping") (println "Yes darling; What is it?")
-	      :else
-	      (do
-		(.println *err* (apply format "[%d %d %d] open"
-				       (map fd-get-num (vals fds))))
+        (cond (= (first args) "-q") (terminate 0)
+              (= (first args) "--ping") (println "Yes darling; What is it?")
+              :else
+              (do
+                (.println *err* (str (into [] (map fd-get-num (vals fds)))
+                                     " open"))
 
-		(binding [clojure.core/*env* env
-			  clojure.core/*cwd* (get env "PWD")
-			  clojure.core/*home* (get env "HOME")
-			  clojure.core/*username* (get env "USER")
-			  *out* (java.io.OutputStreamWriter.
-				 (java.io.FileOutputStream. (fds :out)))
-			  *err* (java.io.PrintWriter.
-				 (java.io.FileOutputStream. (fds :err))
-				 true)	; auto flush
-			  *in* (clojure.lang.LineNumberingPushbackReader.
-				(java.io.InputStreamReader.
-				 (java.io.FileInputStream. (fds :in))))]
-		  (try
-		    (let [first-arg (first args)]
-		      (if (and first-arg
-			       (not (.startsWith first-arg "-"))
-			       (not (.startsWith first-arg "/")))
-			;; if the first arg is a path, get the absolute path with regards to cwd.
-			(apply clojure.main/main (.getCanonicalPath
-						  (java.io.File. clojure.core/*cwd* first-arg))
-			       (rest args))
-			(apply clojure.main/main args)))
+                (binding [clojure.core/*env* env
+                          clojure.core/*cwd* (get env "PWD")
+                          clojure.core/*home* (get env "HOME")
+                          clojure.core/*username* (get env "USER")
+                          *out* (java.io.OutputStreamWriter.
+                                 (java.io.FileOutputStream. (fds :out)))
+                          *err* (java.io.PrintWriter.
+                                 (java.io.FileOutputStream. (fds :err))
+                                 true)
+                          *in* (clojure.lang.LineNumberingPushbackReader.
+                                (java.io.InputStreamReader.
+                                 (java.io.FileInputStream. (fds :in))))]
+                  (try
+                    (let [first-arg (first args)]
+                      (when (and (fds :command-in)
+                                 (fds :command-out))
+                        (.start
+                         (new Thread #(process-comp-doc
+                                       (fds :command-in)
+                                       (fds :command-out)))))
+
+                      (if (and first-arg
+                               (not (.startsWith first-arg "-"))
+                               (not (.startsWith first-arg "/")))
+                        ;; if the first arg is a path, get the absolute path with regards to cwd.
+                        (apply clojure.main/main (.getCanonicalPath
+                                                  (java.io.File. clojure.core/*cwd* first-arg))
+                               (rest args))
+                        (apply clojure.main/main args)))
                     ;; (catch java.io.IOException e nil)
                     (catch CloveExitException e nil)
                     (catch clojure.lang.Compiler$CompilerException e
@@ -122,34 +256,34 @@
                     (catch Exception e
                       (.printStackTrace e *err*))))
 
-		(.println *err* (apply format "[%d %d %d] close"
-				       (map fd-get-num (vals fds))))))
+                (.println *err* (str (into [] (map fd-get-num (vals fds)))
+                                     " close"))))
 
-	;; BUG: Somehow, when used in a pipe the termination of the pipe is
-	;; not communicated back to the client.
+        ;; BUG: Somehow, when used in a pipe the termination of the pipe is
+        ;; not communicated back to the client.
 
-	;; Closing FDs apparently interferes with java's garbage
-	;; collector. If the next lines are left uncommented, if you
-	;; (issue (System/gc) on the second time you open a connection)
-	;; it the live FDs will get garbage collected. There should be a
-	;; way to mark new FDs as open.
+        ;; Closing FDs apparently interferes with java's garbage
+        ;; collector. If the next lines are left uncommented, if you
+        ;; (issue (System/gc) on the second time you open a connection)
+        ;; it the live FDs will get garbage collected. There should be a
+        ;; way to mark new FDs as open.
 
-	;; (libc/fsync (:num (fds :out)))
-	;; (libc/close (:num (fds :out)))
-	;; (libc/fsync (:num (fds :err)))
-	;; (libc/close (:num (fds :err)))
-	;; ;; TODO: what to do with this:
-	;; (libc/close (:num (fds :in)))
-	;; (libc/shutdown sock)
-	;; (CloveNet/close (fd-get-num (:out fds)))
-	(CloveNet/close sock)
-	(System/gc)  ;; darn! We should never need to call System/gc.
-	;; Instead, we should find a way to politely ask java to
-	;; garbage collect the file descriptors.
-	)
-      (.println *err* "Unable to obtain remote fds."))
+        ;; (libc/fsync (:num (fds :out)))
+        ;; (libc/close (:num (fds :out)))
+        ;; (libc/fsync (:num (fds :err)))
+        ;; (libc/close (:num (fds :err)))
+        ;; ;; TODO: what to do with this:
+        ;; (libc/close (:num (fds :in)))
+        ;; (libc/shutdown sock)
+        ;; (CloveNet/close (fd-get-num (:out fds)))
+        (CloveNet/close sock)
+        (System/gc) ;; darn! We should never need to call System/gc.
+        ;; Instead, we should find a way to politely ask java to
+        ;; garbage collect the file descriptors.
+        )
+      (.println *err* "Unable to obtain remote message."))
     (catch Exception e nil
-	   (.printStackTrace e *err*))))
+           (.printStackTrace e *err*))))
 
 (defn- main []
   (initialize)
@@ -158,7 +292,7 @@
   (while (and @sock (pos? @sock))
     (let [sock-a (CloveNet/accept @sock)]
       (when (pos? sock-a)
-	(.start (new Thread (fn [] (process-thread sock-a)))))))
+        (.start (new Thread (fn [] (process-thread sock-a)))))))
 
   (terminate 0))
 
