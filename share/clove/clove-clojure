@@ -120,26 +120,34 @@
       (.endsWith x "$")))
 
 (defn- completions-potential-treeset-gen [line]
+  "returns a java.util.TreeSet of potential completion entris."
   (if (neg? (.indexOf line "/"))
     (doto (.clone @static-names)
       (.addAll (map (comp str key)
-                    (ns-interns 'user))))
+                    ;; TODO: should be their ns, not 'user.
+                    (ns-interns 'user)))
+      (.addAll (map str (all-ns))))
     (let [[ns-or-class-part mtd-part] (.split line "/" 2)]
       (or
-       (try ;; let's see if it is a class
+       (try ; let's see if it is a class
          (doto (TreeSet. String/CASE_INSENSITIVE_ORDER)
            (.addAll
             (map #(str ns-or-class-part "/" (.getName %))
                  (.getMethods (Class/forName ns-or-class-part)))))
          (catch Exception e nil))
-       (try ;; is it a namespace?
+       
+       (try ; perhaps it is a namespace
          (let [their-ns (symbol ns-or-class-part)]
-           (require their-ns)
+           (when-not (find-ns their-ns)
+             (require their-ns))
            (doto (TreeSet. String/CASE_INSENSITIVE_ORDER)
              (.addAll (map
                        #(str ns-or-class-part "/" (key %))
                        (ns-interns their-ns)))))
-         (catch Exception e nil))))))
+         (catch Exception e nil))
+
+       ;; none: we still have to return an empty TreeSet
+       (TreeSet. String/CASE_INSENSITIVE_ORDER)))))
 
 (defn- completions-for [line]
   (let [coll (completions-potential-treeset-gen line)
@@ -168,8 +176,7 @@
     (when-let [x0 (first coll)]
       ;; (.println *err* (str coll))
       (if (second coll)
-        (let [pfx (common-prefix x0 (last coll))]
-          (if (= x0 pfx) coll (cons pfx coll)))
+        (cons (common-prefix x0 (last coll)) coll)
         (if (comp-component? x0)
           (concat [x0] (completions-for x0))
           [x0])))))
