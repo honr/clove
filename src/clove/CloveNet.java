@@ -1,7 +1,9 @@
 package clove;
 
-public class CloveNet {
-  public static class Message {
+public class CloveNet
+{
+  public static class Message
+  {
     public java.io.FileDescriptor[] fds;
     public byte[] buf;
     public int retval;
@@ -16,5 +18,8 @@ public class CloveNet {
   public static native Message unix_recvmsgf (int sockfd, int max_num_fds, int flags);
   public static native int unix_sendmsgf (int sockfd, Message msg, int flags);
 
-  static { System.loadLibrary("CloveNet"); }
+  static
+  {
+    System.loadLibrary("CloveNet");
+  }
 }

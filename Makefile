@@ -1,5 +1,5 @@
 # CFLAGS=-Wall -O3
-CFLAGS=-g -Wall -O3
+CFLAGS=-g -Wall -Wextra -std=gnu99 -pedantic -O3
 # CFLAGS=-g -Wall -pg -O3
 
 default: all
