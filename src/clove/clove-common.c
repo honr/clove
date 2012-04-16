@@ -1,6 +1,6 @@
 #include "clove-common.h"
 
-// for OSX
+// For OSX
 #ifndef _GNU_SOURCE
 
 size_t
@@ -14,7 +14,7 @@ strnlen (const char *s, size_t len)
 char *
 strndup (char const *s, size_t n)
 {
-  size_t len = strnlen (s, n);	// or n-1 ?
+  size_t len = strnlen (s, n);	 // Or n-1 ?
   char *t;
 
   if ((t = malloc (len + 1)) == NULL)
@@ -36,11 +36,11 @@ addr_unix (int type, const char *sockpath)
   addr->sun_family = AF_UNIX;
 
   strcpy (addr->sun_path, sockpath);
-  if (sockpath[0] == '@')	// we assume an abstract path was intended
+  if (sockpath[0] == '@')  // We assume an abstract path was intended.
     {
       addr->sun_path[0] = 0;
       /* We consider the null byte at the end of sockpath NOT part
-         of the name */
+         of the name. */
       a.len = strlen (sockpath) + sizeof (addr->sun_family);
     }
   else
@@ -74,7 +74,7 @@ sock_bind (struct sockaddr_gen a, int force_bind)
 	  exit (2);
 	}
       else
-	{			// perror ("bind");
+	{ // perror ("bind");
 	  exit (0);
 	}
     }
@@ -106,8 +106,8 @@ sock_connect (struct sockaddr_gen a)
   if (a.type & SOCK_STREAM)
     {
       if (connect (sock, a.addr, a.len) != 0)
-	{			// perror ("connect");
-	  // TODO: throw exception
+	{ // perror ("connect");
+	  // TODO: throw exception.
 	  close (sock);
 	  return -1;
 	  // exit(2);
@@ -131,9 +131,8 @@ sock_addr_connect (int type, char *sockpath)
   return sock_connect (a);
 }
 
-/* TODO: pass credentials. the receiving end should simply abort
-   communications if the client's uid is not the same as the
-   service's. */
+// TODO: Pass credentials. The receiving end should simply abort 
+// communications if the client's uid is not the same as the service's.
 
 int
 unix_sendmsgf (int sock, void *buf, int buf_len,
@@ -158,7 +157,8 @@ unix_sendmsgf (int sock, void *buf, int buf_len,
   cmsg->cmsg_len = CMSG_LEN (sizeof (int) * num_fds);
   memcpy (CMSG_DATA (cmsg), fds, sizeof (int) * num_fds);
   msgh.msg_controllen = cmsg->cmsg_len;
-  return sendmsg (sock, &msgh, flags);	// TODO: free msgh, cmsg_buf
+  return sendmsg (sock, &msgh, flags);	
+  // TODO: Free msgh, cmsg_buf.
 }
 
 int

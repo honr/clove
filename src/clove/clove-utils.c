@@ -14,14 +14,14 @@ strlcpy_p (char *dest, const char *src, const char *dest_limit)
   if (dest && (n > 1))
     {
       if (src)
-	{
-	  *(dest++) = 'S';
-	  dest = memccpy (dest, src, 0, n);
-	}
-      else			// only append a 0 at the dest.
-	{
-	  *(dest++) = 0;
-	}
+        {
+          *(dest++) = 'S';
+          dest = memccpy (dest, src, 0, n);
+        }
+      else  // Only append a 0 at the dest.
+        {
+          *(dest++) = 0;
+        }
       return dest;
     }
   else
@@ -66,9 +66,9 @@ str_list_nconcat (struct str_list **lst, struct str_list *tail)
     {
       struct str_list *nxt = *lst;
       while (nxt->next)
-	{
-	  nxt = nxt->next;
-	}
+        {
+          nxt = nxt->next;
+        }
       nxt->next = tail;
     }
   else
@@ -88,6 +88,7 @@ str_list_from_vec (char *vec[], int beg, int end)
   return lst;
 }
 
+// Currently str_list_pop leaks, since the address to the next is not freed.
 char *
 str_list_pop (struct str_list **lst)
 {
@@ -103,8 +104,6 @@ str_list_pop (struct str_list **lst)
     }
 }
 
-// Currently pop leaks, since the address to the next is not freed.
-
 void
 str_list_nreverse (struct str_list **lst)
 {
@@ -113,19 +112,19 @@ str_list_nreverse (struct str_list **lst)
       struct str_list *nxt;
       struct str_list *prv = NULL;
       while (true)
-	{
-	  nxt = (*lst)->next;
-	  (*lst)->next = prv;
-	  prv = (*lst);
-	  if (nxt)
-	    {
-	      (*lst) = nxt;
-	    }
-	  else
-	    {
-	      break;
-	    }
-	}
+        {
+          nxt = (*lst)->next;
+          (*lst)->next = prv;
+          prv = (*lst);
+          if (nxt)
+            {
+              (*lst) = nxt;
+            }
+          else
+            {
+              break;
+            }
+        }
     }
 }
 
@@ -161,9 +160,9 @@ str_split (char *str, char *delims)
   while ((token = strsep (&running, delims)))
     {
       if (*token)
-	{
-	  head = str_list_cons (token, head);
-	}
+        {
+          head = str_list_cons (token, head);
+        }
     }
   return head;
 }
@@ -177,10 +176,10 @@ str_split_n (char *str, int limit, char *delims)
   while ((limit > 1) && (token = strsep (&running, delims)))
     {
       if (*token)
-	{
-	  head = str_list_cons (token, head);
-	  limit--;
-	}
+        {
+          head = str_list_cons (token, head);
+          limit--;
+        }
     }
   if (*running)
     {
@@ -205,101 +204,101 @@ str_split_qe (char *buf, size_t buf_size)
 
       // State Transitions:
       if (state & STATE_ESCAPE)
-	{
-	  state ^= STATE_ESCAPE;
-	}
+        {
+          state ^= STATE_ESCAPE;
+        }
       else if (c == '\\')
-	{
-	  state = STATE_TOKEN | STATE_ESCAPE;
-	  action = 'f';
-	}
+        {
+          state = STATE_TOKEN | STATE_ESCAPE;
+          action = 'f';
+        }
       else if (state == STATE_SPACE)
-	{
-	  if ((c == ' ') || (c == '\t') || (c == '\n') || (c == '\r'))
-	    {
-	      action = 'p';
-	    }			// pass
-	  else if ((c == '"') || (c == '\''))
-	    {
-	      state = STATE_TOKEN;
-	      action = 'p';
-	      quote = c;
-	    }
-	  else
-	    {
-	      state = STATE_TOKEN;
-	    }
-	}			// hold head
+        {
+          if ((c == ' ') || (c == '\t') || (c == '\n') || (c == '\r'))
+            {
+              action = 'p';
+            }  // Pass.
+          else if ((c == '"') || (c == '\''))
+            {
+              state = STATE_TOKEN;
+              action = 'p';
+              quote = c;
+            }
+          else
+            {
+              state = STATE_TOKEN;
+            }
+        }  // Hold head.
       else if (state == STATE_TOKEN)
-	{
-	  if (quote)
-	    {
-	      if (c == quote)
-		{
-		  state = STATE_SPACE;
-		  action = 'c';
-		  quote = 0;
-		}
-	    }
-	  else
-	    {
-	      if ((c == ' ') || (c == '\t') || (c == '\n') || (c == '\r'))
-		{
-		  state = STATE_SPACE;
-		  action = 'c';
-		}
-	      else if ((c == '"') || (c == '\''))
-		{
-		  state = STATE_TOKEN;
-		  action = 'c';
-		  quote = c;
-		}
-	    }
-	}
+        {
+          if (quote)
+            {
+              if (c == quote)
+                {
+                  state = STATE_SPACE;
+                  action = 'c';
+                  quote = 0;
+                }
+            }
+          else
+            {
+              if ((c == ' ') || (c == '\t') || (c == '\n') || (c == '\r'))
+                {
+                  state = STATE_SPACE;
+                  action = 'c';
+                }
+              else if ((c == '"') || (c == '\''))
+                {
+                  state = STATE_TOKEN;
+                  action = 'c';
+                  quote = c;
+                }
+            }
+        }
 
-      if ((action == 'c') || (action == 'f'))	// copy or flush
-	{
-	  memcpy (bufout_cur, buf, buf_cur - buf);
-	  bufout_cur += buf_cur - buf;
-	  buf = buf_cur;
-	  if (action == 'c')	// copy
-	    {
-	      *bufout_cur = 0;	// NULL terminate
-	      bufout_cur++;
-	    }
-	}
+      if ((action == 'c') || (action == 'f'))  // Copy or flush.
+        {
+          memcpy (bufout_cur, buf, buf_cur - buf);
+          bufout_cur += buf_cur - buf;
+          buf = buf_cur;
+          if (action == 'c')  // Copy.
+            {
+              *bufout_cur = 0;  // NULL terminate.
+              bufout_cur++;
+            }
+        }
       if (action)
-	{
-	  buf++;
-	}
+        {
+          buf++;
+        }
     }
 
   // Termination:
   if (state & STATE_ESCAPE)
     {
       fprintf (stderr, "Error: Tried to escape end-of-line.\n"
-	       "       Reading next line is not implemented, yet.\n");
-    }				// TODO: read next line.
+               "       Reading next line is not implemented, yet.\n");
+    }  // TODO: read next line.
   else if (state == STATE_TOKEN)
     {
       if (quote)
-	{
-	  fprintf (stderr,
-		   "Error: Tried to extend quotation to the next line.\n"
-		   "       Reading next line is not implemented, yet.\n");
-	}
+        {
+          fprintf (stderr,
+                   "Error: Tried to extend quotation to the next line.\n"
+                   "       Reading next line is not implemented, yet.\n");
+        }
       else
-	{
-	  memcpy (bufout_cur, buf, buf_cur - buf);
-	  bufout_cur += buf_cur - buf;
-	  buf = buf_cur + 1;	// redundant
-	  *bufout_cur = 0;	// NULL terminate
-	  bufout_cur++;
-	}
+        {
+          memcpy (bufout_cur, buf, buf_cur - buf);
+          bufout_cur += buf_cur - buf;
+          buf = buf_cur + 1;  // Redundant.
+          *bufout_cur = 0;  // NULL terminate.
+          bufout_cur++;
+        }
     }
   // End.
 
-  *bufout_cur = 0;		// NULL terminate
+  *bufout_cur = 0;  // NULL terminate.
   return str_list_from_pack (&bufout, bufout + buf_size);
 }
 
@@ -326,14 +325,14 @@ str_list_from_pack (char **buf_cur, const char *buf_lim)
   for (; *buf;)
     {
       if ((l = strnlen (buf, buf_lim - buf)) < buf_lim - buf)
-	{
-	  lst = str_list_cons (buf, lst);
-	  buf += l + 1;
-	}			// skip the string and its NULL.
+        {
+          lst = str_list_cons (buf, lst);
+          buf += l + 1;
+        }  // Skip the string and its NULL.
       else
-	{
-	  break;
-	}
+        {
+          break;
+        }
     }
   *buf_cur = buf + 1;
   // str_list_nreverse (&lst);
@@ -363,13 +362,12 @@ str_replace (char *s, char *from, char *to)
   int size_s = strlen (s);
   int i;
   char *cur;
-  // pass 1: find the number of occurances, to find the size of the
-  //         result.
+  // Pass 1: Find the number of occurances, to find the size of the result.
   for (cur = strstr (s, from), i = 0;
        cur && *cur; cur = strstr (cur + size_from, from), i++);
   char *res = (char *) malloc (size_s + (size_to - size_from) * i + 1);
   char *resp = res;
-  // pass 2: copy.
+  // Pass 2: Copy.
   char *prev;
   for (prev = s, cur = strstr (prev, from);
        cur; prev = cur + size_from, cur = strstr (prev, from))
@@ -435,52 +433,56 @@ service_call (struct service srv, char **default_envp)
       close (pipefd[0]);
       close (1);
       if (dup2 (pipefd[1], 1) == -1)
-	{
-	  perror ("dup2");
-	}
+        {
+          perror ("dup2");
+        }
       // char* service_argv_dummy[] = { NULL, "hello", "world", NULL };
       char *service_argv_dummy[] = { NULL, NULL };
       char **service_argv = service_argv_dummy;
       service_argv[0] = srv.binpath;
       char **service_envp = default_envp;
-      // TODO: devise ways to:
-      //   - start, stop, restart, status on a service
+      // TODO: Devise ways to:
+      //       - start,
+      //       - stop,
+      //       - restart,
+      //       - status
+      //       on a service.
       if (access (srv.confpath, F_OK) == 0)
-	{
-	  struct serviceconf *sc = parse_conf_file (srv.confpath);
-	  service_envp = envp_dup_update_or_add
-	    (service_envp,
-	     str_list_cons (str_concat ("CLOVESOCKET=", srv.sockpath), NULL));
-	  service_envp = envp_dup_update_or_add (service_envp, sc->envs);
-	  // TODO: make sure this is working properly.  Apparently
-	  //       the order of a duplicate env vars is different
-	  //       between Darwin and Linux.
-	  if (sc->interpretter)
-	    {
-	      service_argv[0] = srv.binpath;
-	      service_argv = argv_dup_add (service_argv, sc->interpretter);
-	      char *interpretter = service_argv[0];
-	      execve (interpretter, service_argv, service_envp);
-	      exit (3);
-	    }
-	}
+        {
+          struct serviceconf *sc = parse_conf_file (srv.confpath);
+          service_envp = envp_dup_update_or_add
+            (service_envp,
+             str_list_cons (str_concat ("CLOVESOCKET=", srv.sockpath), NULL));
+          service_envp = envp_dup_update_or_add (service_envp, sc->envs);
+          // TODO: Make sure this is working properly.
+          //       Apparently the order of a duplicate env vars is different
+          //       between Darwin and Linux.
+          if (sc->interpretter)
+            {
+              service_argv[0] = srv.binpath;
+              service_argv = argv_dup_add (service_argv, sc->interpretter);
+              char *interpretter = service_argv[0];
+              execve (interpretter, service_argv, service_envp);
+              exit (3);
+            }
+        }
 
       if (execve (srv.binpath, service_argv, service_envp) == -1)
-	{
-	  perror ("execve");
-	  exit (3);
-	}
+        {
+          perror ("execve");
+          exit (3);
+        }
     }
   close (pipefd[1]);
   printf ("waiting for %s ...\n", srv.name);
-  // TODO: have a time out
-  char *buf = malloc (128);	// TODO: fix hardcoded size
-  if (read (pipefd[0], buf, 127) < 0)	// TODO: fix hardcoded size.
+  // TODO: have a time out.
+  char *buf = malloc (128);  // TODO: Fix hardcoded size.
+  if (read (pipefd[0], buf, 127) < 0)  // TODO: Fix hardcoded size.
     {
       perror ("(read) could not communicate with the service");
       exit (1);
     }
-  buf[127] = 0;			// TODO: fix hardcoded size
+  buf[127] = 0;  // TODO: Fix hardcoded size.
   printf ("%s says: %s", srv.name, buf);
   close (pipefd[0]);
   return buf;
@@ -489,13 +491,13 @@ service_call (struct service srv, char **default_envp)
 struct serviceconf *
 parse_conf_file (char *filepath)
 /* TODO:
-   cur_uname = uname ();
-   cur_uname_m = uname ("-m");
-   archmatcher="(^$(uname) $(uname -m))|(^$(uname)/)|(^/)|(^[^/]+=)|(^[^/]+$)"
+     cur_uname = uname ();
+     cur_uname_m = uname ("-m");
+     archmatcher="(^$(uname) $(uname -m))|(^$(uname)/)|(^/)|(^[^/]+=)|(^[^/]+$)"
 
-   TODO: have platform dependent interpretters.
+   TODO: Have platform dependent interpretters.
 
-   TODO: split key and value, and perform ~~ (or $THIS) replacement.
+   TODO: Split key and value, and perform ~~ (or $THIS) replacement.
 */
 {
   FILE *file;
@@ -513,66 +515,65 @@ parse_conf_file (char *filepath)
   if ((file = fopen (filepath, "r")))
     {
       while (fgets (line_storage, CONFLINE_MAX, file))
-	{
-	  char *line = strndup (line_storage, strcspn (line_storage, "\n"));
-	  if (line[0] == '/')
-	    {
-	      line = line + 1;	/* move beyond the '/' */
-	      char *platform_specifier;
-	      platform_specifier = strsep (&line, "/");
-	      // fprintf (stderr, "specifier: %s\n", platform_specifier);
-	      if ((*platform_specifier) &&
-		  ((platform_specifier = str_beginswith
-		    (platform_specifier, unm.sysname)) == NULL))
-		{		// fprintf (stderr, "sysname does not match\n");
-		  continue;
-		}
-	      if (*platform_specifier)
-		{
-		  platform_specifier++;	/* move past delimeter */
-		}
-	      if ((*platform_specifier) &&
-		  ((platform_specifier = str_beginswith
-		    (platform_specifier, unm.machine)) == NULL))
-		{		// fprintf (stderr, "machine does not match\n");
-		  continue;
-		}
-	    }
+        {
+          char *line = strndup (line_storage, strcspn (line_storage, "\n"));
+          if (line[0] == '/')
+            {
+              line = line + 1;  // Move beyond the '/'.
+              char *platform_specifier;
+              platform_specifier = strsep (&line, "/");
+              // fprintf (stderr, "specifier: %s\n", platform_specifier);
+              if ((*platform_specifier) &&
+                  ((platform_specifier = str_beginswith
+                    (platform_specifier, unm.sysname)) == NULL))
+                { // fprintf (stderr, "sysname does not match\n");
+                  continue;
+                }
+              if (*platform_specifier)
+                {
+                  platform_specifier++;  // Move past delimeter.
+                }
+              if ((*platform_specifier) &&
+                  ((platform_specifier = str_beginswith
+                    (platform_specifier, unm.machine)) == NULL))
+                { // fprintf (stderr, "machine does not match\n");
+                  continue;
+                }
+            }
 
-	  /* if the line starts with a '/', there must be another
-	     '/' somewhere after that.  take the string between the
-	     two '/'s as platform specifier, and drop the line
-	     unless the specifier matches current platform.
-	     removed. */
+          /* If the line starts with a '/', there must be another '/'
+             somewhere after that.  Take the string between the two
+             '/'s as platform specifier, and drop the line unless the
+             specifier matches current platform.  Removed. */
 
-	  // printf ("%s, %s\n", line, str_beginswith (line, "#!"));
+          // printf ("%s, %s\n", line, str_beginswith (line, "#!"));
 
-	  if (sc->interpretter == NULL)
-	    {
-	      char *line1 = str_beginswith (line, "#!");
-	      if (line1)
-		{
-		  sc->interpretter = str_split
-		    (str_replace (line1, "~", getenv ("HOME")),
-		     whitespacechars);
-		  fprintf (stderr, "%s\n", line);	// printout accepted line
-		  continue;
-		}
-	    }
+          if (sc->interpretter == NULL)
+            {
+              char *line1 = str_beginswith (line, "#!");
+              if (line1)
+                {
+                  sc->interpretter = str_split
+                    (str_replace (line1, "~", getenv ("HOME")),
+                     whitespacechars);
+                  fprintf (stderr, "%s\n", line);       // printout accepted line
+                  continue;
+                }
+            }
 
-	  /* skip leading whitespace, take until '#' */
-	  line += strspn (line, whitespacechars);
-	  line = strsep (&line, "#");
+          // Skip leading whitespace, take until '#'.
+          line += strspn (line, whitespacechars);
+          line = strsep (&line, "#");
 
-	  // line_eff = str_replace (line, "~~", former_value_of_key);
-	  // move the above to envp_dup_update_or_add
-	  line = str_replace (line, "~", getenv ("HOME"));
-	  if (line && *line)	// not empty
-	    {
-	      fprintf (stderr, "%s\n", line);	// printout accepted line
-	      sc->envs = str_list_cons (line, sc->envs);
-	    }
-	}
+          // line_eff = str_replace (line, "~~", former_value_of_key);
+          // Move the above to envp_dup_update_or_add.
+          line = str_replace (line, "~", getenv ("HOME"));
+          if (line && *line)    // not empty
+            {
+              fprintf (stderr, "%s\n", line);  // Printout accepted line.
+              sc->envs = str_list_cons (line, sc->envs);
+            }
+        }
       fclose (file);
     }
   return sc;
@@ -580,12 +581,12 @@ parse_conf_file (char *filepath)
 
 char **
 envp_dup_update_or_add (char **envp, struct str_list *extraenvs)
-{				// find the number of envp key-vals.
+{                               // find the number of envp key-vals.
   if (extraenvs == NULL)
     {
       return envp;
     }
-  // otherwise, we need to make a new envp.
+  // Otherwise, we need to make a new envp.
 
   int envp_count = 0;
   char **cur1;
@@ -600,31 +601,31 @@ envp_dup_update_or_add (char **envp, struct str_list *extraenvs)
   for (cur1 = envp, cur2 = envp_new; *cur1; cur1++, cur2++)
     {
       for (cur3 = extraenvs; cur3; cur3 = cur3->next)
-	{
-	  if (((curstr = cur3->str) != NULL) &&
-	      (str_beginswith (*cur1,
-			       strndup (curstr, strcspn (curstr, "=") + 1))
-	       != NULL))
-	    {
-	      *cur2 = curstr;
-	      // fprintf (stderr, "updated: %s\n", *cur2);
-	      cur3->str = NULL;
-	    }
-	  else
-	    {
-	      *cur2 = *cur1;
-	    }
-	}
+        {
+          if (((curstr = cur3->str) != NULL) &&
+              (str_beginswith (*cur1,
+                               strndup (curstr, strcspn (curstr, "=") + 1))
+               != NULL))
+            {
+              *cur2 = curstr;
+              // fprintf (stderr, "updated: %s\n", *cur2);
+              cur3->str = NULL;
+            }
+          else
+            {
+              *cur2 = *cur1;
+            }
+        }
     }
 
   for (cur3 = extraenvs; cur3; cur3 = cur3->next)
     {
       if ((curstr = cur3->str) != NULL)
-	{
-	  *cur2 = curstr;
-	  // fprintf (stderr, "added: %s\n", *cur2);
-	  cur2++;
-	}
+        {
+          *cur2 = curstr;
+          // fprintf (stderr, "added: %s\n", *cur2);
+          cur2++;
+        }
     }
   *cur2 = NULL;
   return envp_new;
@@ -658,20 +659,20 @@ makeancesdirs (char *path)
     {
       char *p, *q, *path_dup = strndup (path, PATH_MAX);
       for (p = path_dup + 1, q = strchr (p, '/'); q; q = strchr (p, '/'))
-	{
-	  *q = 0;
-	  mkdir (path_dup, 0700);	// TODO: fix hardcoded value
-	  // TOOD: make sure the mode 0777 or 01777 is OK for all platforms.
-	  *q = '/';
-	  p = q + 1;
-	}
+        {
+          *q = 0;
+          mkdir (path_dup, 0700);  // TODO: Fix hardcoded value.
+          // TOOD: Make sure the mode 0777 or 01777 is OK for all platforms.
+          *q = '/';
+          p = q + 1;
+        }
       free (path_dup);
       return 0;
-    }				// success
+    }  // Success.
   {
     return -1;
   }
-}				// path was empty failed.
+}  // Path was empty failed.
 
 void
 sigaction_inst (int signum, void (*handler) (int))

@@ -6,13 +6,13 @@
 #include <sys/utsname.h>
 #include <limits.h>
 
-#include <signal.h>		// ?
+#include <signal.h>             // ?
 
 #define CONFLINE_MAX 8192
-// maximum size of each line in the config file.
+// Maximum size of each line in the config file.
 
-char *RTPREFIX;			// has to be defined in your code. e.g.: = "~/.local";
-char *RUNPATH;			// same.  e.g.: = "~/.local/var/run/clove";
+char *RTPREFIX;  // Has to be defined in your code. e.g.: = "~/.local";
+char *RUNPATH;   // Same, e.g.: = "~/.local/var/run/clove";
 
 char *str_beginswith (char *haystack, char *needle);
 
@@ -37,45 +37,41 @@ int str_list_count (struct str_list *lst);
 void str_list_free (struct str_list *lst);
 
 struct str_list *str_split (char *str, char *delims);
-/* destructively split string into a str_list.
-   str cannot be const (or non-writable).  empty tokens are
-   suppressed. */
+/* Destructively split string into a str_list.
+   Str cannot be const (or non-writable).  Empty tokens are suppressed. */
 
 struct str_list *str_split_n (char *str, int limit, char *delims);
-/* same as str_split, except there is a limit to number of
-   delimitions. */
+/* Same as str_split, except there is a limit to number of delimitions. */
 
 struct str_list *str_split_qe (char *buf, size_t buf_size);
-/* split buf of maximum size buf_size into a str_list.
-   empty terms are not allowed (terminates the str_list at that
-   point).  quotations (single and double quote characters) and also
+/* Split buf of maximum size buf_size into a str_list.
+   Empty terms are not allowed (terminates the str_list at that
+   point).  Quotations (single and double quote characters) and also
    escaping (using backslash) are respected. */
 
 void *str_list_to_pack (char **buf_cur, const char *buf_lim,
-			struct str_list *lst);
-/* place the str_list lst in the buffer. places a NULL character after
-   each string. two consecutive NULLs show the end of pack. buf_lim
+                        struct str_list *lst);
+/* Place the str_list lst in the buffer. Places a NULL character after
+   each string. Two consecutive NULLs show the end of pack. buf_lim
    points to right after the end of buffer, beyond which we never
    write. buf_cur will be modified to point to right after the pack in
    the buffer.
-   You can use the idiom: buf_cur = buf; buf_lim = buf +
-   buffer_size;
+   You can use the idiom: buf_cur = buf; buf_lim = buf + buffer_size;
 
    None of the strings should be empty.
    TODO: relax this restriction. use the format ~aaa0~bbb0~ccc00. */
 
 struct str_list *str_list_from_pack (char **buf_cur, const char *buf_lim);
-/* create a str_list from a pack in the input buffer.
+/* Create a str_list from a pack in the input buffer.
    buf_cur will be updated to point to right after the pack in the
    buffer.  buf_lim shows the extent right before which we read the
    input buffer. */
 
-
 char *str_concat (char *s1, char *s2);
-/* return concatenation of s1 and s2. modify none. */
+/* Return concatenation of s1 and s2. Modify none. */
 
 char *str_replace (char *s, char *from, char *to);
-/* create a new string with all instances of from replace to to. */
+/* Create a new string with all instances of from replace to to. */
 
 char *strlcpy_p (char *dest, const char *src, const char *dest_limit);
 /* If dest is NULL do nothing and just return NULL.  Otherwise, copy
@@ -86,7 +82,7 @@ char *strlcpy_p (char *dest, const char *src, const char *dest_limit);
    Also, if src is NULL, only a 0 is appended at the end of dest. */
 
 char *expand_file_name (char *filename);
-/* replace ~ with $HOME */
+/* Replace ~ with $HOME */
 
 #define sockpath_length 256
 #define args_max 256
@@ -95,9 +91,9 @@ char *expand_file_name (char *filename);
 struct service
 {
   char *name;
-  char *confpath;		/* the default path to the config file */
+  char *confpath;  // The default path to the config file.
   time_t confpath_last_mtime;
-  char *binpath;		/* the default path to the executable */
+  char *binpath;  // The default path to the executable.
   char *sockpath;
   int pid;
   int sock;
@@ -122,6 +118,6 @@ char **envp_dup_update_or_add (char **envp, struct str_list *extraenvs);
 char **argv_dup_add (char **oldargv, struct str_list *prefixargv);
 
 int makeancesdirs (char *path);
-/* Input should not have .. or . path components. */
+/* Input should not have ".." or "." path components. */
 
 void sigaction_inst (int signum, void (*handler) (int));
